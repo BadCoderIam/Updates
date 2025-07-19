@@ -1,0 +1,437 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SheeTY Roadmap</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<style>
+    body {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      color: #ff6f00;
+      background-image: url('https://images.wallpapersden.com/image/download/black-hole-hd-art_bWZmbGyUmZqaraWkpJRobWllrWdma2U.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+    }
+    h1, h2, h3 {
+      text-align: center;
+    }
+    .roadmap-wrapper {
+      background-color: rgba(0,0,0,0.75);
+      padding: 40px;
+      margin: 30px auto;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 1200px;
+    }
+    .roadmap-wrapper h1 {
+      font-size: 2.8rem;
+      margin-bottom: 10px;
+      color: #ff6f00;
+    }
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 30px;
+      margin-top: 30px;
+    }
+    .roadmap-item {
+      background: rgba(255, 111, 0, 0.1);
+      border: 1px solid #ff8c1a;
+      border-radius: 16px;
+      padding: 20px;
+      text-align: left;
+      color: #ffd699;
+      transition: transform 0.3s ease-in-out;
+    }
+    .roadmap-item:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px #ffb84d;
+    }
+    .roadmap-item h3 {
+      font-size: 1.4rem;
+      color: #ffb84d;
+      text-transform: uppercase;
+    }
+    .roadmap-item ul {
+      padding-left: 20px;
+      margin-top: 10px;
+    }
+    .roadmap-item li {
+      margin-bottom: 8px;
+      list-style-type: square;
+    }
+
+    /* Completed Phase Styling */
+    .complete {
+      border: 2px solid #00ff88;
+      background: rgba(0, 128, 0, 0.15);
+      box-shadow: 0 0 15px #00ff88;
+      color: #ccffdd;
+    }
+    .complete h3 {
+      color: #00ff88;
+    }
+
+    /* Breathing Animation for Next Phase */
+    @keyframes breathe {
+      0% { box-shadow: 0 0 10px #ffd699; }
+      50% { box-shadow: 0 0 25px #ffcc66; }
+      100% { box-shadow: 0 0 10px #ffd699; }
+    }
+    .breathing {
+      animation: breathe 2.5s ease-in-out infinite;
+      border: 2px dashed #ffcc66;
+    }
+
+    footer {
+      margin-top: 60px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #ffd699;
+      padding: 20px;
+      animation: pulseFooterText 7s infinite;
+    }
+    @keyframes pulseFooterText {
+      0%, 100% { color: #ffd699; }
+      50% { color: #ff6f00; }
+    }
+  
+    .how-it-works-section {
+      background: transparent;
+      padding: 20px 0;
+      font-family: 'Orbitron', sans-serif;
+      color: #ffb84d;
+      animation: glowEffect 5s linear infinite;
+    }
+      padding: 20px 0;
+    }
+
+    .swiper {
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .swiper-slide {
+      transform: scale(0.55);
+      transform-origin: center;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      background: #111;
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+    }
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 12px;
+      background: #111;
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+    }
+
+    .slide-icon {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+    .slide-icon img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      border-radius: 50%;
+    }
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+
+    .slide-text h3 {
+      font-size: 1.1rem;
+      margin: 0 0 4px;
+      color: #fff;
+      animation: glowEffect 5s linear infinite;
+    }
+      font-size: 1rem;
+      margin: 0 0 4px;
+    }
+
+    .slide-text p {
+      font-size: 0.9rem;
+      margin: 0;
+      line-height: 1.3;
+      max-width: 680px;
+      color: #ffb84d;
+      animation: glowEffect 5s linear infinite;
+    }
+      font-size: 0.85rem;
+      margin: 0;
+      line-height: 1.2;
+      max-width: 680px;
+    }
+
+    .swiper-button-prev, .swiper-button-next {
+      width: 28px;
+      height: 28px;
+      bottom: -40px;
+      color: #ffcc66;
+    }
+
+    @media screen and (max-width: 768px) {
+      .swiper-slide {
+      transform: scale(0.55);
+      transform-origin: center;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      background: #111;
+      padding: 8px 16px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+    }
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .slide-icon {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+    }
+    .slide-icon img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      border-radius: 50%;
+    }
+        margin-bottom: 8px;
+      }
+    }
+    
+    @keyframes glowEffect {
+      0% { text-shadow: 0 0 5px #ffb84d, 0 0 10px #ffb84d; }
+      50% { text-shadow: 0 0 15px #ffa94d, 0 0 25px #ffa94d; }
+      100% { text-shadow: 0 0 5px #ffb84d, 0 0 10px #ffb84d; }
+    }
+    
+/* Glow effect for headers */
+.glow-title {
+  color: white;
+  text-shadow: 0 0 10px #ffae42, 0 0 20px #ffae42, 0 0 30px #ffae42;
+  font-weight: bold;
+}
+
+</style>
+<link href="https://unpkg.com/swiper/swiper-bundle.min.css" rel="stylesheet"/>
+<style>
+.how-it-works-section {
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.how-it-works-section h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2rem;
+  color: white;
+  text-shadow: 0 0 10px #ffb84d;
+  margin-bottom: 1rem;
+}
+
+.how-it-works-section p {
+  font-size: 1rem;
+  color: #ffb84d;
+  font-family: 'Orbitron', sans-serif;
+  text-shadow: 0 0 6px #ffb84d;
+}
+
+.how-it-works-slider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0 auto;
+  max-width: 900px;
+  background-color: #111;
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: 'Orbitron', sans-serif;
+}
+
+.how-it-works-box {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem 1rem;
+  background-color: #111;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #ffb84d;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #ffb84d;
+}
+
+.how-it-works-box h3 {
+  font-size: 1.2rem;
+  color: white;
+  margin: 0.5rem 0;
+  text-shadow: 0 0 6px #ffffff;
+}
+
+.how-it-works-box p {
+  font-size: 0.9rem;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 90%;
+}
+
+.how-it-works-box img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
+}
+
+/* Glow effect for headers */
+.glow-title {
+  color: white;
+  text-shadow: 0 0 10px #ffae42, 0 0 20px #ffae42, 0 0 30px #ffae42;
+  font-weight: bold;
+}
+
+</style></head>
+<body>
+<div class="roadmap-wrapper">
+<h1 style="color: white; text-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff;">SheeTY Launch Roadmap</h1>
+<div class="roadmap-grid">
+<div class="roadmap-item complete">
+<h3>Phase 1: Game Foundation</h3>
+<ul>
+<li>Core gameplay prototyping ✅</li>
+<li>Deploy $SHEET on Base Ethereum ✅</li>
+<li>Secure legal &amp; advisory partners ✅</li>
+</ul>
+</div>
+<div class="roadmap-item breathing">
+<h3>Phase 2: Wallet &amp; Auth</h3>
+<ul>
+<li>Integrate Google login &amp; Web3Auth</li>
+<li>Create linked crypto wallets</li>
+<li>Deposit/claim functionality for $SHEET</li>
+</ul>
+</div>
+<div class="roadmap-item">
+<h3>Phase 3: Tokenomics &amp; Store</h3>
+<ul>
+<li>Launch NFT Ship Spinner</li>
+<li>Enable cosmetic purchases &amp; power-ups</li>
+<li>List $SHEET token on aggregator APIs</li>
+</ul>
+</div>
+<div class="roadmap-item">
+<h3>Phase 4: Game Launch</h3>
+<ul>
+<li>Official MVP release</li>
+<li>Enable on-chain claim &amp; leaderboard</li>
+<li>Burn 25% of $SHEET to the HOLE</li>
+</ul>
+</div>
+<div class="roadmap-item">
+<h3>Phase 5: Raffle Rewards</h3>
+<ul>
+<li>Launch Chainlink VRF-powered raffles</li>
+<li>Weekly, Bi-Weekly &amp; Monthly PS5 raffles</li>
+<li>Free &amp; paid entries via game or tokens</li>
+</ul>
+</div>
+<div class="roadmap-item">
+<h3>Phase 6: Growth &amp; Scaling</h3>
+<ul>
+<li>Partnerships with meme coins &amp; influencers</li>
+<li>Global player referral &amp; leaderboard rewards</li>
+<li>SheeTY expansion with new game modes</li>
+</ul>
+</div>
+</div>
+</div>
+<section class="how-it-works-section">
+<h2>How It Works</h2>
+<p class="subtitle">Learn how to play, earn, and win with SheeTY</p>
+<div class="swiper">
+<div class="swiper-wrapper">
+<div class="swiper-slide">
+<div class="slide-icon">
+<img alt="Play" src="https://cdn-icons-png.flaticon.com/512/1069/1069102.png"/>
+</div>
+<div class="slide-text">
+<h3>Step 1: Play the Game</h3>
+<p>Choose your ship and enter the SheeTY Abyss. Earn points by blasting meteors and dodging obstacles as you progress.</p>
+</div>
+</div>
+<div class="swiper-slide">
+<div class="slide-icon">
+<img alt="Blackhole Icon" src="0b089a86-5ba2-48c9-9d00-f15936343d38.jpg"/>
+</div>
+<div class="slide-text">
+<h3>Step 2: Earn or Buy $SHEET</h3>
+<p>Earn $SHEET by reaching score thresholds or winning matches. You can also purchase $SHEET with crypto or fiat payment options.</p>
+</div>
+</div>
+<div class="swiper-slide">
+<div class="slide-icon">
+<img alt="Enter Raffle" src="https://cdn-icons-png.flaticon.com/512/4341/4341139.png"/>
+</div>
+<div class="slide-text">
+<h3>Step 3: Enter Raffles</h3>
+<p>Use your $SHEET or points to enter raffles. Participate weekly, bi-weekly, or monthly for high-value rewards and chances to win.</p>
+</div>
+</div>
+<div class="swiper-slide">
+<div class="slide-icon">
+<img alt="Win Real Prizes" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"/>
+</div>
+<div class="slide-text">
+<h3>Step 4: Win Real Prizes</h3>
+<p>Raffle winners are selected via Chainlink VRF. Claim prizes like PS5s, crypto, or NFTs if you're among the lucky few!</p>
+</div>
+</div>
+</div>
+<div class="swiper-button-prev"></div>
+<div class="swiper-button-next"></div>
+</div>
+</section>
+<footer>
+    © 2025 SheeTHole Enterprises | Explore. Capture. Dominate the Blockchain Universe.
+  </footer>
+<script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
+<script>
+    const swiper = new Swiper('.swiper', {
+      loop: true,
+      autoplay: {
+        delay: 7000,
+        disableOnInteraction: false
+      },
+      navigation: {
+        nextEl: '.swiper-button-next',
+        prevEl: '.swiper-button-prev',
+      },
+      slidesPerView: 1,
+      spaceBetween: 20,
+      grabCursor: true,
+    });
+  </script>
+</body>
+</html>
