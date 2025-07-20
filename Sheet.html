@@ -9,6 +9,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&amp;display=swap" rel="stylesheet"/>
 <style>
     body {
+      background-image: url('https://images.wallpapersden.com/image/download/black-hole-hd-art_bWZmbGyUmZqaraWkpJRobWllrWdma2U.jpg');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+    
       margin: 0;
       font-family: 'Orbitron', sans-serif;
       color: #ff6f00;
@@ -40,6 +45,11 @@
       margin-top: 30px;
     }
     .roadmap-item {
+      background: rgba(255, 102, 0, 0.15);
+      border: 2px solid #ff6600;
+      color: #ffffff;
+      text-shadow: 0 0 6px red;
+    
       background: rgba(255, 111, 0, 0.1);
       border: 1px solid #ff8c1a;
       border-radius: 16px;
@@ -235,7 +245,6 @@
 }
 
 </style>
-<link href="https://unpkg.com/swiper/swiper-bundle.min.css" rel="stylesheet"/>
 <style>
 .how-it-works-section {
   text-align: center;
@@ -312,8 +321,121 @@
   font-weight: bold;
 }
 
+</style><script src="https://cdn.tailwindcss.com"></script><style>
+    body {
+      background: linear-gradient(to bottom, #e0e7ff, #f0f9ff);
+      font-family: 'Inter', sans-serif;
+    }
+    .carousel {
+      display: flex;
+      overflow: hidden;
+      position: relative;
+      perspective: 1200px;
+      gap: 1rem;
+      height: 400px;
+    }
+    .slide {
+      flex: 0 0 100%;
+      opacity: 0;
+      transform: scale(0.8) rotateY(6deg);
+      transition: transform 0.8s ease, opacity 0.8s ease;
+      transform-style: preserve-3d;
+      border-radius: 1rem;
+      background: linear-gradient(to bottom right, #ffffff, #f3f4f6);
+      padding: 2rem;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.05);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+    }
+    .slide.prev {
+      opacity: 0.3;
+      transform: scale(0.9) rotateY(10deg) translateX(-30%);
+      z-index: 1;
+    }
+    .slide.next {
+      opacity: 0.3;
+      transform: scale(0.9) rotateY(-10deg) translateX(30%);
+      z-index: 1;
+    }
+    .slide.active {
+      opacity: 1;
+      transform: scale(1) rotateY(0deg) translateX(0);
+      z-index: 2;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
+    }
+    .carousel-controls {
+      display: flex;
+      justify-content: center;
+      margin-top: 2rem;
+      gap: 1rem;
+    }
+    .carousel-controls button {
+      background: #1d4ed8;
+      color: white;
+      padding: 0.5rem 1.25rem;
+      border-radius: 9999px;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+    .carousel-controls button:hover {
+      background: #1e40af;
+    }
+  </style><style>
+.slide {
+  background: rgba(10, 10, 10, 0.85) !important;
+  color: white !important;
+  border: 1px solid #ff6600 !important;
+  box-shadow: 0 0 16px #ff6600 !important;
+  padding: 2rem;
+  border-radius: 1rem;
+}
+
+.carousel-controls button {
+  background-color: #ff6f00 !important;
+  color: white !important;
+  font-weight: bold !important;
+  border: 1px solid #ffae42 !important;
+  box-shadow: 0 0 8px #ffae42 !important;
+  padding: 0.5rem 1.25rem !important;
+  border-radius: 9999px !important;
+}
+</style><style>
+.slide h3 {
+  color: white !important;
+  text-shadow: 0 0 6px #ffae42, 0 0 12px #ffae42;
+}
+
+.slide p {
+  color: #fefefe !important;
+  text-shadow: 0 0 3px #ffae42;
+}
+
+.slide img {
+  filter: brightness(100) invert(1) drop-shadow(0 0 3px #ffae42);
+}
+</style><style>
+@keyframes flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    opacity: 1;
+    text-shadow: 0 0 6px #ffae42, 0 0 20px #ffae42;
+    filter: brightness(1.1) drop-shadow(0 0 4px #ffae42);
+  }
+  20%, 24%, 55% {
+    opacity: 0.4;
+    text-shadow: none;
+    filter: brightness(0.6);
+  }
+}
+
+.slide h3,
+.slide p,
+.slide img {
+  animation: flicker 4s infinite alternate;
+}
 </style></head>
-<body>
+<body style="background-image: url('https://images.wallpapersden.com/image/download/black-hole-hd-art_bWZmbGyUmZqaraWkpJRobWllrWdma2U.jpg');background-size: cover;background-position: center;background-attachment: fixed;background-repeat: no-repeat;">
 <div class="roadmap-wrapper">
 <h1 style="color: white; text-shadow: 0 0 10px #ffffff, 0 0 20px #ffffff;">SheeTY Launch Roadmap</h1>
 <div class="roadmap-grid">
@@ -367,71 +489,74 @@
 </div>
 </div>
 </div>
-<section class="how-it-works-section">
-<h2>How It Works</h2>
-<p class="subtitle">Learn how to play, earn, and win with SheeTY</p>
-<div class="swiper">
-<div class="swiper-wrapper">
-<div class="swiper-slide">
-<div class="slide-icon">
-<img alt="Play" src="https://cdn-icons-png.flaticon.com/512/1069/1069102.png"/>
+<section class="text-center px-4 pt-16">
+<h1 class="text-4xl font-bold tracking-tight sm:text-5xl mb-4" style="color: white; text-shadow: 0 0 10px #ffae42, 0 0 20px #ffae42, 0 0 30px #ffae42;">How It Works</h1>
+<p class="text-lg text-gray-600 max-w-xl mx-auto" style="color: white; text-shadow: 0 0 10px #ffae42, 0 0 20px #ffae42, 0 0 30px #ffae42;">
+      Learn how to play, earn, and win with SheeTY's blockchain-powered platform
+    </p>
+</section><section class="mt-12 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
+<div class="carousel">
+<div class="slide active">
+<img class="w-20 h-20 mx-auto mb-4" src="https://cdn-icons-png.flaticon.com/512/1888/1888008.png"/>
+<h3 class="text-xl font-semibold mb-1 text-center">Step 1: Play the Game</h3>
+<p class="text-gray-600 text-center">Spin for your ship and enter the SheeTY Abyss. Earn points by destroying meteors. A Free option for entry into our raffles!</p>
 </div>
-<div class="slide-text">
-<h3>Step 1: Play the Game</h3>
-<p>Choose your ship and enter the SheeTY Abyss. Earn points by blasting meteors and dodging obstacles as you progress.</p>
+<div class="slide next">
+<img class="w-20 h-20 mx-auto mb-4" src="https://cdn-icons-png.flaticon.com/512/11782/11782398.png"/>
+<h3 class="text-xl font-semibold mb-1 text-center">Step 2: Collect Points</h3>
+<p class="text-gray-600 text-center">Obtain a minumum of 2000 points to enter the raffle. Must obtain enough points in one game session to be eligible for entry. IP addresses and Google accounts will be logged.</p>
 </div>
+<div class="slide">
+<img class="w-20 h-20 mx-auto mb-4" src="https://cdn-icons-png.flaticon.com/512/12298/12298665.png"/>
+<h3 class="text-xl font-semibold mb-1 text-center">Step 3: Survive</h3>
+<p class="text-gray-600 text-center">Dodge obstacles and bullets to survive for higher scores. If you choose not to play, you can pay $10-$20 depending on which tier raffle you choose to join. Raffle terms will be listed.</p>
 </div>
-<div class="swiper-slide">
-<div class="slide-icon">
-<img alt="Blackhole Icon" src="0b089a86-5ba2-48c9-9d00-f15936343d38.jpg"/>
+<div class="slide">
+<img class="w-20 h-20 mx-auto mb-4" src="https://cdn-icons-png.flaticon.com/512/1426/1426770.png"/>
+<h3 class="text-xl font-semibold mb-1 text-center">Step 4: Claim Rewards</h3>
+<p class="text-gray-600 text-center">Rise through the ranks for the leaderboard for exclusive rewards! Redeem your scores and enter a raffle for big wins and REAL prizes.</p>
 </div>
-<div class="slide-text">
-<h3>Step 2: Earn or Buy $SHEET</h3>
-<p>Earn $SHEET by reaching score thresholds or winning matches. You can also purchase $SHEET with crypto or fiat payment options.</p>
-</div>
-</div>
-<div class="swiper-slide">
-<div class="slide-icon">
-<img alt="Enter Raffle" src="https://cdn-icons-png.flaticon.com/512/4341/4341139.png"/>
-</div>
-<div class="slide-text">
-<h3>Step 3: Enter Raffles</h3>
-<p>Use your $SHEET or points to enter raffles. Participate weekly, bi-weekly, or monthly for high-value rewards and chances to win.</p>
-</div>
-</div>
-<div class="swiper-slide">
-<div class="slide-icon">
-<img alt="Win Real Prizes" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"/>
-</div>
-<div class="slide-text">
-<h3>Step 4: Win Real Prizes</h3>
-<p>Raffle winners are selected via Chainlink VRF. Claim prizes like PS5s, crypto, or NFTs if you're among the lucky few!</p>
+<div class="slide">
+<img class="w-20 h-20 mx-auto mb-4" src="https://cdn-icons-png.flaticon.com/512/15713/15713785.png"/>
+<h3 class="text-xl font-semibold mb-1 text-center">Step 5: Win Real Prizes</h3>
+<p class="text-gray-600 text-center">Multi-Tier Raffles offered all FREE to enter! Random winners get PS5s, crypto, or exclusive SheeTY NFTs via Chainlink VRF.</p>
 </div>
 </div>
+<div class="carousel-controls">
+<button onclick="prevSlide()">Prev</button>
+<button onclick="nextSlide()">Next</button>
 </div>
-<div class="swiper-button-prev"></div>
-<div class="swiper-button-next"></div>
-</div>
-</section>
-<footer>
+</section><footer>
     © 2025 SheeTHole Enterprises | Explore. Capture. Dominate the Blockchain Universe.
   </footer>
 <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 <script>
-    const swiper = new Swiper('.swiper', {
-      loop: true,
-      autoplay: {
-        delay: 7000,
-        disableOnInteraction: false
-      },
-      navigation: {
-        nextEl: '.swiper-button-next',
-        prevEl: '.swiper-button-prev',
-      },
-      slidesPerView: 1,
-      spaceBetween: 20,
-      grabCursor: true,
-    });
-  </script>
-</body>
+    let currentIndex = 0;
+    const slides = document.querySelectorAll('.slide');
+
+    function updateSlides() {
+      slides.forEach((slide, index) => {
+        slide.classList.remove('active', 'prev', 'next');
+        if (index === currentIndex) {
+          slide.classList.add('active');
+        } else if (index === (currentIndex - 1 + slides.length) % slides.length) {
+          slide.classList.add('prev');
+        } else if (index === (currentIndex + 1) % slides.length) {
+          slide.classList.add('next');
+        }
+      });
+    }
+
+    function nextSlide() {
+      currentIndex = (currentIndex + 1) % slides.length;
+      updateSlides();
+    }
+
+    function prevSlide() {
+      currentIndex = (currentIndex - 1 + slides.length) % slides.length;
+      updateSlides();
+    }
+
+    setInterval(nextSlide, 6000);
+  </script></body>
 </html>
