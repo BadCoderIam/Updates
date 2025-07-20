@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+  <style>
+    /* Enhanced Title Styling */
+    header {
+      margin-top: 250px;
+      text-align: center;
+      font-size: 6rem; /* Larger text size */
+      font-family: 'Orbitron', sans-serif; /* Futuristic font */
+      background: rgba(0, 0, 0, 0.6); /* Transparent background */
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: rgba(0, 0, 0, 0.6);
+      animation: gradientShift 5s linear infinite, glowEffect 7s ease-in-out infinite;
+      text-shadow: 0 0 20px rgba(255, 111, 0, 0.8),
+                   0 0 30px rgba(255, 184, 77, 0.6),
+                   0 0 40px rgba(255, 140, 26, 0.4),
+                   0 0 50px rgba(255, 140, 26, 0.6); /* Glowing shadow */
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    @keyframes glowEffect {
+      0%, 100% {
+        text-shadow: 0 0 20px rgba(255, 111, 0, 0.8),
+                     0 0 30px rgba(255, 184, 77, 0.6),
+                     0 0 40px rgba(255, 140, 26, 0.4),
+                     0 0 50px rgba(255, 140, 26, 0.6);
+      }
+      50% {
+        text-shadow: 0 0 30px rgba(255, 184, 77, 1),
+                     0 0 40px rgba(255, 140, 26, 0.8),
+                     0 0 50px rgba(255, 140, 26, 0.6),
+                     0 0 60px rgba(255, 111, 0, 0.8);
+      }
+    }
+
+    header:hover {
+      transform: scale(1.1); /* Slight zoom effect */
+      animation-play-state: paused; /* Pause the animation on hover */
+    }
+
+    @keyframes driftToBlackhole {
+    0% { transform: translateX(0) scale(1) rotate(0deg); opacity: 1; filter: none; }
+    80% { transform: translateX(650px) scale(0.9) rotate(10deg); opacity: 0.7; filter: blur(1px); }
+    90% { transform: translateX(700px) scale(0.4, 1.5) rotate(45deg); opacity: 0.3; filter: blur(2px); }
+    100% { transform: translateX(750px) scale(0, 3) rotate(90deg); opacity: 0; filter: blur(4px); }
+  }
+
+  @keyframes resetPosition {
+    0% { transform: translateX(750px) scale(0, 3); opacity: 0; filter: blur(4px); }
+    100% { transform: translateX(0) scale(1); opacity: 1; filter: none; }
+  }
+
+  .blackhole-drift {
+    animation: driftToBlackhole 10s ease-in forwards, resetPosition 0s ease-in 15s forwards;
+    animation-iteration-count: infinite;
+    animation-play-state: running;
+  }
+
+  .blackhole-drift:hover {
+    animation-play-state: paused;
+  }
+
+  #ui button {
+    padding: 8px 16px;
+    margin: 0;
+    background: linear-gradient(45deg, #ff6f00, #ff8c1a);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 140, 26, 0.3);
+    width: fit-content;
+  }
+
+  #ui button:hover {
+    transform: scale(1.1);
+    background: linear-gradient(45deg, #ff8c1a, #ffb84d);
+    box-shadow: 0 6px 20px rgba(255, 140, 26, 0.5);
+  }
+
+  #ui button:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 10px rgba(255, 140, 26, 0.3);
+  }
+
+    /* Anchor Link Buttons */
+    #ui a button {
+      display: inline-block;
+      text-decoration: none;
+    }
+
+    /* Video Background */
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: -1;
+    }
+
+    /* UI Position */
+    #ui {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+    /* Leaderboard */
+    #leaderboard {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px;
+      border-radius: 5px;
+      color: #fff;
+    }
+
+    #leaderboard h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    #leaderboard ul {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    #leaderboard li {
+      font-size: 1rem;
+      color: #ffb84d;
+    }
+
+    /* Upcoming Upgrades Section */
+    #upgrades {
+      position: fixed;
+      bottom: 20px;
+      left: 20px; /* Moved to the left */
+      background: transparent; /* Transparent background */
+      color: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 1rem;
+      z-index: 101;
+      animation: glowEffect 5s linear infinite; /* Add glowing effect */
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    /* Glow Effect for Upgrades Text */
+    #upgrades h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      animation: glowEffect 5s linear infinite;
+      transition: transform 0.3s ease;
+    }
+
+    #upgrades h2:hover {
+      transform: scale(1.1); /* Slight zoom effect on hover */
+      animation-play-state: paused; /* Pause the glowing animation on hover */
+    }
+
+    #upgrades ul {
+      list-style-type: none;
+      padding: 0;
+      margin: 10px 0;
+    }
+
+    #upgrades li {
+      font-size: 1rem;
+      color: #fefcf9f5;
+      animation: glowEffect 5s linear infinite;
+    }
+
+    #upgrades p {
+      font-size: 0.9rem;
+      color: #fefefd;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 700px; /* Footer moved 6 more inches lower */
+      text-align: center;
+      font-size: 0.8rem;
+      color: #000;
+      padding: 20px 0;
+      background-color: transparent; /* Footer background is fully transparent */
+      animation: pulseFooterText 7s infinite; /* Pulsating effect for footer text */
+    }
+
+    @keyframes pulseFooterText {
+      0% {
+        color: #000;
+      }
+      50% {
+        color: #ff6f00;
+      }
+      100% {
+        color: #000;
+      }
+    }
+  </style>
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SheeTHole - A Web3 space game powered by the Base Network. Connect your wallet and explore deep space to earn $SheeT!">
+    <title>SheeTHole</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  </head>
+
+  <body>
+    <!-- Video Background -->
+    <video autoplay muted loop>
+      <source src="black-hole-nebula-moewalls-com.mp4" type="video/mp4">
+    </video>
+
+    <!-- Header Section -->
+    <header>
+      SheeTHole
+    </header>
+
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+  <button id="connectWallet" class="blackhole-drift">Connect Wallet</button>
+  <a href="./SheeTyGame.html" target="_blank">
+    <button id="playGame" class="blackhole-drift">Play SheeTy Abyss</button>
+  </a>
+  <a href="./Sheet.html" target="_blank">
+    <button id="viewNFTs" class="blackhole-drift">SheeTy Roadmap</button>
+  </a>
+</div>
+
+    <div id="leaderboard">
+  <h2>Leaderboard</h2>
+  <ul id="leaderboardList"></ul>
+  <p id="countdown" style="color:#ffb84d; font-size: 0.9rem; margin-top: 8px;"></p>
+</div>
+
+    <!-- Upcoming Upgrades Section -->
+    <div id="upgrades">
+      <h2>Upcoming Upgrades</h2>
+      <ul>
+        <li>Game Deployment: SheeTy Abyss</li>
+        <li>Random giveaways for playing</li>
+        <li>Weekly leaderboards with rewards</li>
+        <li>Additional Games Deployed</li>
+      </ul>
+      <p> In Game Rewards:</p>
+      <p>- SheeT Rewards: Earn 1000-3000 Points, Automatically eligible for our Raffles!</p>
+      <p>- Weekly Top Player Reward: Weekly rewards will be posted on our site!</p>
+    </div>
+
+    <!-- Footer Section -->
+    <footer>
+      © 2024 SheeTHole Enterprises | Explore. Capture. Dominate the Blockchain Universe.
+    </footer>
+
+     <script src="https://global.transak.com/sdk/v1.1.2/transak.min.js"></script>
+
+<script type="module">
+  import { openTransakWidget } from './src/transak.js';
+
+  document.getElementById('connectWallet').addEventListener('click', () => {
+    openTransakWidget();
+  });
+</script>
+<script>
+function fetchLeaderboard() {
+  fetch('https://sheethole.net/api/leaderboard')
+    .then(res => res.json())
+    .then(data => {
+      const list = document.getElementById('leaderboardList');
+      list.innerHTML = '';
+      data.leaderboard.forEach(entry => {
+        const li = document.createElement('li');
+        li.textContent = `${entry.player_name}: ${entry.points} pts`;
+        list.appendChild(li);
+      });
+    });
+}
+
+function updateCountdown() {
+  const now = new Date();
+  const reset = new Date();
+  reset.setHours(12, 0, 0, 0);
+  if (now > reset) reset.setDate(reset.getDate() + 1);
+
+  const diff = reset - now;
+  const hrs = String(Math.floor(diff / 3600000)).padStart(2, '0');
+  const mins = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+  const secs = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+
+  document.getElementById('countdown')?.innerText = `⏳ Reset in ${hrs}:${mins}:${secs}`;
+}
+
+setInterval(updateCountdown, 1000);
+setInterval(fetchLeaderboard, 1800000); // Refresh every 30 minutes
+window.onload = () => {
+  fetchLeaderboard();
+  updateCountdown();
+};
+</script>
+  </body>
+</html>
