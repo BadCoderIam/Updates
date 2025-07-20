@@ -1,6 +1,7 @@
 <!DOCTYPE html>
+
 <html lang="en">
-  <style>
+<style>
     /* Enhanced Title Styling */
     header {
       margin-top: 250px;
@@ -196,10 +197,11 @@
 
     /* Footer */
     footer {
-      margin-top: 700px; /* Footer moved 6 more inches lower */
+      margin-top: 270px; /* Footer moved 6 more inches lower */
       text-align: center;
-      font-size: 0.8rem;
-      color: #000;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      color: #ffb84d;
       padding: 20px 0;
       background-color: transparent; /* Footer background is fully transparent */
       animation: pulseFooterText 7s infinite; /* Pulsating effect for footer text */
@@ -217,64 +219,53 @@
       }
     }
   </style>
-
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="SheeTHole - A Web3 space game powered by the Base Network. Connect your wallet and explore deep space to earn $SheeT!">
-    <title>SheeTHole</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-  </head>
-
-  <body>
-    <!-- Video Background -->
-    <video autoplay muted loop>
-      <source src="black-hole-nebula-moewalls-com.mp4" type="video/mp4">
-    </video>
-
-    <!-- Header Section -->
-    <header>
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="SheeTHole - A Web3 space game powered by the Base Network. Connect your wallet and explore deep space to earn $SheeT!" name="description"/>
+<title>SheeTHole</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&amp;display=swap" rel="stylesheet"/>
+</head>
+<body>
+<!-- Video Background -->
+<video autoplay="" loop="" muted="">
+<source src="black-hole-nebula-moewalls-com.mp4" type="video/mp4"/>
+</video>
+<!-- Header Section -->
+<header>
       SheeTHole
     </header>
-
-    <canvas id="gameCanvas"></canvas>
-    <div id="ui">
-  <button id="connectWallet" class="blackhole-drift">Connect Wallet</button>
-  <a href="./SheeTyGame.html" target="_blank">
-    <button id="playGame" class="blackhole-drift">Play SheeTy Abyss</button>
-  </a>
-  <a href="./Sheet.html" target="_blank">
-    <button id="viewNFTs" class="blackhole-drift">SheeTy Roadmap</button>
-  </a>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+<button class="blackhole-drift" id="connectWallet">Login</button>
+<a href="./SheeTyGame.html" target="_blank">
+<button class="blackhole-drift" id="playGame">Play SheeTy Abyss</button>
+</a>
+<a href="./Sheet.html" target="_blank">
+<button class="blackhole-drift" id="viewNFTs">SheeTy Roadmap</button>
+</a>
 </div>
-
-    <div id="leaderboard">
-  <h2>Leaderboard</h2>
-  <ul id="leaderboardList"></ul>
-  <p id="countdown" style="color:#ffb84d; font-size: 0.9rem; margin-top: 8px;"></p>
+<div id="leaderboard">
+<h2>Leaderboard</h2>
+<ul id="leaderboardList"></ul>
+<p id="countdown" style="color:#ffb84d; font-size: 0.9rem; margin-top: 8px;"></p>
 </div>
+<!-- Upcoming Upgrades Section -->
+<div id="upgrades">
+<h2>Upcoming Upgrades</h2>
+<ul>
+<li>Game Deployment: SheeTy Abyss</li>
+<li>Random giveaways for playing</li>
+<li>Weekly leaderboards with rewards</li>
+<li>Additional Games Deployed</li>
+</ul>
+<p> In Game Rewards:</p>
+<p>- SheeT Rewards: Earn 1000-3000 Points, Automatically eligible for our Sweepstakes!</p>
+<p>- Weekly Top Player Reward: Weekly rewards will be posted on our site!</p>
+</div>
+<!-- Footer Section -->
 
-    <!-- Upcoming Upgrades Section -->
-    <div id="upgrades">
-      <h2>Upcoming Upgrades</h2>
-      <ul>
-        <li>Game Deployment: SheeTy Abyss</li>
-        <li>Random giveaways for playing</li>
-        <li>Weekly leaderboards with rewards</li>
-        <li>Additional Games Deployed</li>
-      </ul>
-      <p> In Game Rewards:</p>
-      <p>- SheeT Rewards: Earn 1000-3000 Points, Automatically eligible for our Raffles!</p>
-      <p>- Weekly Top Player Reward: Weekly rewards will be posted on our site!</p>
-    </div>
-
-    <!-- Footer Section -->
-    <footer>
-      © 2024 SheeTHole Enterprises | Explore. Capture. Dominate the Blockchain Universe.
-    </footer>
-
-     <script src="https://global.transak.com/sdk/v1.1.2/transak.min.js"></script>
-
+<script src="https://global.transak.com/sdk/v1.1.2/transak.min.js"></script>
 <script type="module">
   import { openTransakWidget } from './src/transak.js';
 
@@ -318,5 +309,119 @@ window.onload = () => {
   updateCountdown();
 };
 </script>
-  </body>
+
+<footer>
+  © 2025 SheeTHole Enterprises | Explore. Capture. Dominate the Blockchain Universe.
+  | <a onclick="document.getElementById('termsModal').style.display='block'" style="color:#ffb84d; cursor:pointer;">Terms &amp; Conditions</a> 
+  | <a onclick="document.getElementById('privacyModal').style.display='block'" style="color:#ffb84d; cursor:pointer;">Privacy Policy</a>
+</footer>
+<!-- MODALS -->
+<div class="modal" id="termsModal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.85);">
+<div class="modal-content" style="background-color:#111; margin:10% auto; padding:20px; border:1px solid #ffb84d; width:80%; max-width:700px; border-radius:8px; color:#fff;">
+<span class="close" onclick="document.getElementById('termsModal').style.display='none'" style="color:#ffb84d; float:right; font-size:28px; font-weight:bold; cursor:pointer;">×</span>
+<h2>Terms &amp; Conditions</h2>
+<p><strong>SheeTY Sweepstakes Terms &amp; Conditions</strong><br/>
+    By participating in the SheeTY Sweepstakes ("Sweepstakes"), you agree to abide by the following terms and conditions.</p>
+<h3>1. Eligibility</h3>
+<p>Participants must be at least 18 years old and reside a jurisdiction where such sweepstakes are permitted. Void where prohibited.
+  <h3>2. Restricted Persons and Territories</h3>
+<div style="background:#111; border:1px solid #ffb84d; padding:1rem; border-radius:8px;">
+<p><strong>NOTICE ON PROHIBITED USE – RESTRICTED PERSONS:</strong> The Services are not offered to and may not be used by persons or entities who reside in, are citizens of, are located in, are incorporated in, or have a registered office in any restricted territory (each such person or entity from a restricted territory, a “Restricted Person”).</p>
+<p>We do not make exceptions. Therefore, if you are a Restricted Person, do not attempt to use the Services or access the Services via a VPN or any other similar means intended to circumvent the restrictions set forth herein.</p>
+<button onclick="document.getElementById('restrictedList').style.display = (document.getElementById('restrictedList').style.display === 'none' ? 'block' : 'none')" style="margin-top:10px; padding:8px 14px; background:linear-gradient(90deg,#ff6b6b,#ffa502); color:#000; font-weight:bold; border:none; border-radius:6px;">View Restricted Territories</button>
+<div id="restrictedList" style="display:none; margin-top:1rem;">
+<ul>
+<li>U.S. States: Hawaii, Utah, Washington, Nevada, New York</li>
+<li>Countries: North Korea, Iran, Belarus, Syria, Russia, Myanmar</li>
+</ul>
+</div>
+</div>
+<h3>3. Agreement to Terms</h3>
+<p>By using our Services, you agree to be bound by these Terms. If you do not agree, you must not use the Services or access the Site. Local laws may affect the enforceability of some provisions, and any unenforceable term will apply only to the maximum extent permitted. Your rights under applicable law are not affected.</p>
+
+<h3>4. Dispute Resolution</h3>
+<p>Except where prohibited by law, all disputes must be resolved through binding arbitration. If you are a resident of a jurisdiction where applicable law prohibits arbitration of disputes, this clause will not apply to you, and disputes will be governed instead by Section 13 (Governing Law).</p>
+
+<h3>5. How to Enter</h3>
+<ul>
+  <li><strong>Free Entry:</strong> Earn points by playing the SheeTY Abyss game. Players qualify for different prize tiers based on score:</li>
+  <ul>
+    <li>Bronze Tier: 1,000 points</li>
+    <li>Silver Tier: 2,000 points</li>
+    <li>Gold Tier: 3,000 points</li>
+  </ul>
+  <li><strong>Optional Entry:</strong> Users may also enter raffles by spending $SHEET tokens.</li>
+</ul>
+
+<h3>6. No Purchase Necessary</h3>
+<p>A purchase or payment of any kind is not necessary to enter or win. All players can enter through gameplay and skill.</p>
+
+<h3>7. Prizes</h3>
+<div style="background:#111; border:1px solid #ffb84d; padding:1rem; border-radius:8px;">
+  <p>Winners will receive prizes including but not limited to:</p>
+  <ul>
+    <li>Cash prizes (maximum $600 per player per prize)</li>
+    <li>Physical items (e.g., PS5, gift cards)</li>
+    <li>Crypto assets (e.g., $SHEET tokens or NFTs)</li>
+  </ul>
+  <p>Winners receiving prizes over $600 may be issued a 1099-MISC tax form and will be required to provide relevant tax information before prize delivery.</p>
+</div>
+
+<h3>8. Prize Distribution Model</h3>
+<p>Prizes will be distributed as follows:</p>
+<ul>
+  <li><strong>Tiered Rewards:</strong> Points determine eligibility for Bronze, Silver, and Gold raffles.</li>
+  <li><strong>Raffles Held Monthly:</strong> Winners are selected via Chainlink VRF to ensure fairness.</li>
+  <li><strong>Prize Cap:</strong> Each winner is limited to a $600 value per prize. Larger items may be paid in installments of $600/month.</li>
+  <li><strong>Token Conversion:</strong> NFT or crypto rewards can be optionally converted into $SHEET tokens or merchandise via SheeTHole dashboard.</li>
+</ul>
+
+<h3>9. Limitation of Liability</h3>
+<p>SheeTHole Enterprises is not responsible for lost, delayed, or undelivered prizes due to incorrect information or shipping failure. By entering, you release the organizer from all liability.</p>
+
+<h3>10. Sponsor</h3>
+<p>This sweepstakes is sponsored by SheeTHole Enterprises, a digital gaming platform provider.</p>
+
+<h3>11. Contact</h3>
+<p>For questions or to request alternate entry methods, please contact <a href="mailto:support@sheethole.net" style="color:#ffb84d;">support@sheethole.net</a>.</p>
+ in a jurisdiction where such sweepstakes are permitted. Void where prohibited.</p>
+</div>
+</div>
+</div>
+<div class="modal" id="privacyModal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.85);">
+<div class="modal-content" style="background-color:#111; margin:10% auto; padding:20px; border:1px solid #ffb84d; width:80%; max-width:700px; border-radius:8px; color:#fff;">
+<span class="close" onclick="document.getElementById('privacyModal').style.display='none'" style="color:#ffb84d; float:right; font-size:28px; font-weight:bold; cursor:pointer;">×</span>
+<h2>Privacy Policy</h2>
+<p>This Privacy Policy describes how SheeTHole Enterprises ("we", "us", or "our") collects, uses, and shares your personal information when you use our services, particularly when signing in using Google authentication.</p>
+<h3>1. Information We Collect</h3>
+<ul>
+<li>Google Account Data: When you sign in using Google, we collect your name, email address, and Google ID for authentication and personalization.</li>
+<li>Gameplay &amp; Rewards Tracking: We track your gameplay stats, high scores, and reward claims associated with your Google ID.</li>
+</ul>
+<h3>2. How We Use Your Information</h3>
+<ul>
+<li>To authenticate you via Google login</li>
+<li>To deliver personalized rewards and track in-game progress</li>
+<li>To notify you of raffle eligibility and status</li>
+<li>To ensure fair participation in sweepstakes and reward programs</li>
+</ul>
+<h3>3. Data Sharing</h3>
+<p>We do not sell your personal information. We may share data with third-party services only as necessary to provide core platform functions such as gameplay analytics and reward fulfillment.</p>
+<h3>4. Data Retention</h3>
+<p>We retain your information for as long as your account is active or as needed to comply with legal obligations. You may request deletion at any time by contacting us.</p>
+<h3>5. Your Rights</h3>
+<ul>
+<li>You have the right to access, update, or delete your personal data.</li>
+<li>You can opt out of marketing communications at any time.</li>
+</ul>
+<h3>6. Children’s Privacy</h3>
+<p>Our services are not intended for children under the age of 13. We do not knowingly collect personal information from children.</p>
+<h3>7. Changes to This Policy</h3>
+<p>We may update this policy occasionally. Updates will be posted on this page with the revised date.</p>
+<h3>8. Contact Us</h3>
+<p>If you have any questions or wish to exercise your data rights, contact us at <a href="mailto:support@sheethole.net" style="color:#ffb84d;">support@sheethole.net</a>.</p>
+<p>By using our platform, you consent to the terms of this Privacy Policy.</p>
+</div>
+</div>
+</body>
 </html>
