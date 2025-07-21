@@ -62,65 +62,86 @@
     animation-play-state: paused;
   }
 
+ /* Video Background */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Orbitron', sans-serif;
+  overflow: hidden;
+}
+
+video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* UI Container Position */
+#ui {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+@media (max-width: 768px) {
+  #ui {
+    top: auto;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
   #ui button {
-    padding: 8px 16px;
-    margin: 0;
-    background: linear-gradient(45deg, #ff6f00, #ff8c1a);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(255, 140, 26, 0.3);
-    width: fit-content;
+    font-size: 0.9rem;
+    padding: 6px 12px;
   }
+}
 
-  #ui button:hover {
-    transform: scale(1.1);
-    background: linear-gradient(45deg, #ff8c1a, #ffb84d);
-    box-shadow: 0 6px 20px rgba(255, 140, 26, 0.5);
-  }
+/* Button Styling */
+#ui button {
+  padding: 8px 16px;
+  margin: 0;
+  background: linear-gradient(45deg, #ff6f00, #ff8c1a);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 140, 26, 0.3);
+  width: fit-content;
+}
 
-  #ui button:active {
-    transform: scale(0.95);
-    box-shadow: 0 2px 10px rgba(255, 140, 26, 0.3);
-  }
+#ui button:hover {
+  transform: scale(1.1);
+  background: linear-gradient(45deg, #ff8c1a, #ffb84d);
+  box-shadow: 0 6px 20px rgba(255, 140, 26, 0.5);
+}
 
-    /* Anchor Link Buttons */
-    #ui a button {
-      display: inline-block;
-      text-decoration: none;
-    }
+#ui button:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 10px rgba(255, 140, 26, 0.3);
+}
 
-    /* Video Background */
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      font-family: 'Orbitron', sans-serif;
-    }
-
-    video {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      z-index: -1;
-    }
-
-    /* UI Position */
-    #ui {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+/* Anchor Buttons */
+#ui a button {
+  display: inline-block;
+  text-decoration: none;
+}
 
     /* Leaderboard */
     #leaderboard {
@@ -227,9 +248,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&amp;display=swap" rel="stylesheet"/>
 </head>
 <body>
-<!-- Video Background -->
-<video autoplay="" loop="" muted="">
-<source src="black-hole-nebula-moewalls-com.mp4" type="video/mp4"/>
+<!-- Responsive Background Video -->
+<video id="bgVideo" autoplay loop muted playsinline>
+  <source src="black-hole-nebula-moewalls-com.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
 </video>
 <!-- Header Section -->
 <header>
@@ -237,7 +259,7 @@
     </header>
 <canvas id="gameCanvas"></canvas>
 <div id="ui">
-<button class="blackhole-drift" id="connectWallet">Login</button>
+<button class="blackhole-drift" onclick="document.getElementById('loginModal').style.display='block'">Login</button>
 <a href="./SheeTyGame.html" target="_blank">
 <button class="blackhole-drift" id="playGame">Play SheeTy Abyss</button>
 </a>
@@ -264,15 +286,6 @@
 <p>- Weekly Top Player Reward: Weekly rewards will be posted on our site!</p>
 </div>
 <!-- Footer Section -->
-
-<script src="https://global.transak.com/sdk/v1.1.2/transak.min.js"></script>
-<script type="module">
-  import { openTransakWidget } from './src/transak.js';
-
-  document.getElementById('connectWallet').addEventListener('click', () => {
-    openTransakWidget();
-  });
-</script>
 <script>
 function fetchLeaderboard() {
   fetch('https://sheethole.net/api/leaderboard')
@@ -423,5 +436,24 @@ window.onload = () => {
 <p>By using our platform, you consent to the terms of this Privacy Policy.</p>
 </div>
 </div>
+<div class="modal" id="loginModal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.85);">
+  <div class="modal-content" style="background-color:#111; margin:10% auto; padding:20px; border:1px solid #ffb84d; width:80%; max-width:500px; border-radius:8px; color:#fff;">
+    <span class="close" onclick="document.getElementById('loginModal').style.display='none'" style="color:#ffb84d; float:right; font-size:28px; font-weight:bold; cursor:pointer;">×</span>
+    <h2 style="color:#ffb84d;">Login Options</h2>
+    <div id="googleLoginButton" style="width:100%; margin:10px 0;"></div>
+    <button id="metaMaskButton" style="width:100%; margin:10px 0;">Login with MetaMask</button>
+    <button id="twitterLoginButton" style="width:100%; margin:10px 0;">Login with Twitter (X)</button>
+    <div id="userInfo" style="margin-top: 1rem;"></div>
+  </div>
+</div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script type="module">
+  import { initializeGoogleSignIn } from './src/googleAuth.js';
+
+  const clientId = '475019880749-qdbpinnod6egm4oqltv3qahgtuotlv69.apps.googleusercontent.com';
+  window.addEventListener('DOMContentLoaded', () => {
+    initializeGoogleSignIn(clientId);
+  });
+</script>
 </body>
 </html>
