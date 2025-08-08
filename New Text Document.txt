@@ -1,0 +1,43 @@
+# Required: Microsoft.Graph module
+# Install if needed: Install-Module Microsoft.Graph -Scope CurrentUser
+
+# Connect to Graph with required scopes
+Connect-MgGraph -Environment USGov -Scopes "User.ReadWrite.All", "GroupMember.Read.All"
+
+# Define constants
+$groupName = "DYN-ActiveUsers"
+$photoFolderPath = "<Photo Folder Path>"  # e.g., "C:\NewHirePhotos"
+
+# Get the group
+$group = Get-MgGroup -Filter "DisplayName eq '$groupName'"
+
+if (-not $group) {
+    Write-Host "❌ Group '$groupName' not found." -ForegroundColor Red
+    exit
+}
+
+Write-Host "`n✔️ Found group: $($group.DisplayName) ($($group.Id))" -ForegroundColor Cyan
+
+# Get all members of the group
+$members = Get-MgGroupMember -GroupId $group.Id -All
+
+# Loop through users in the group
+foreach ($member in $members) {
+    if ($member.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user') {
+        $userId = $member.Id
+        $userUPN = $member.AdditionalProperties['userPrincipalName']
+        $photoPath = Join-Path $photoFolderPath "$userUPN.png"
+
+        if (Test-Path $photoPath -PathType Leaf) {
+            try {
+                # Forcefully apply photo even if one already exists
+                Set-MgUserPhotoContent -UserId $userId -InFile $photoPath -Force
+                Write-Host "✅ Photo applied for: $userUPN" -ForegroundColor Green
+            } catch {
+                Write-Host "❌ Error applying photo for $userUPN: $_" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "⚠️  No photo file found for $userUPN, skipping..." -ForegroundColor Yellow
+        }
+    }
+}

@@ -29,6 +29,17 @@ db.run(`CREATE TABLE claims (
   claimed_at TEXT
 )`);
 
+db.run(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    google_user_id TEXT,
+    session_id TEXT,
+    score INTEGER,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP
+  )
+`);
+
 // ✅ Existing route to save ship claims
 app.post('/api/claim-ship', (req, res) => {
   const { googleUserId, googleUserName, googleUserEmail, shipNumber, rarity, color, image, claimedAt } = req.body;
@@ -84,6 +95,31 @@ app.post('/api/google-login', async (req, res) => {
     console.error('Google login verification error:', error);
     res.status(401).json({ success: false, message: 'Invalid token' });
   }
+});
+
+app.post('/api/session/start', (req, res) => {
+  const { googleUserId, sessionId } = req.body;
+  db.run(
+    `INSERT INTO sessions (google_user_id, session_id) VALUES (?, ?)`,
+    [googleUserId, sessionId],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, id: this.lastID });
+      console.log(`🟢 Session started: ${googleUserId} - ${sessionId}`);
+    }
+  );
+});
+
+app.post('/api/session/end', (req, res) => {
+  const { sessionId, score } = req.body;
+  db.run(
+    `UPDATE sessions SET score = ?, ended_at = datetime('now') WHERE session_id = ?`,
+    [score, sessionId],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true });
+    }
+  );
 });
 
 // CREATE leaderboard table if it doesn't exist
