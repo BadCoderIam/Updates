@@ -1,17 +1,61 @@
-# Required: Microsoft.Graph module
-# Install if needed: Install-Module Microsoft.Graph -Scope CurrentUser
+# Set-PhotoForNewGroupMembers.ps1
 
-# Connect to Graph with required scopes
-Connect-MgGraph -Environment USGov -Scopes "User.ReadWrite.All", "GroupMember.Read.All"
+# Connect to Graph
+Connect-MgGraph -Environment USGov -Scopes "User.ReadWrite.All", "GroupMember.Read.All", "Group.Read.All"
 
-# Get the group
-$group = Get-MgGroup -Filter "DisplayName eq 'DYN-ActiveUsers'"
+# Config
+$groupName = "DYN-ActiveUsers"
+$photoFilePath = "C:\ADMX\android-chrome-512x512.png"
+$snapshotPath = "C:\scripts\activeusers_snapshot.json"
 
-# Set the same photo for every member
-Get-MgGroupMember -GroupId $group.Id -All | ForEach-Object {
-    if ($_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user') {
-        $userUPN = $_.AdditionalProperties['userPrincipalName']
-        Set-MgUserPhotoContent -UserId $userUPN -InFile "C:\scripts\picture.png"
-        Write-Host "✅ Photo set for $userUPN"
+# Validate photo file exists
+if (!(Test-Path $photoFilePath)) {
+    Write-Host "Photo file not found: $photoFilePath" -ForegroundColor Red
+    exit
+}
+
+# Get group
+$group = Get-MgGroup -Filter "DisplayName eq '$groupName'"
+if (-not $group) {
+    Write-Host "Group '$groupName' not found." -ForegroundColor Red
+    exit
+}
+
+# Load previous snapshot (if exists)
+$prevMembers = @()
+if (Test-Path $snapshotPath) {
+    $prevMembers = Get-Content $snapshotPath | ConvertFrom-Json
+}
+
+# Get current members
+$currentMembers = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
+    $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
+}
+
+# Get list of new users
+$newUsers = @()
+foreach ($member in $currentMembers) {
+    $userUPN = $member.AdditionalProperties['userPrincipalName']
+    if ($prevMembers -notcontains $userUPN) {
+        $newUsers += $userUPN
     }
 }
+
+if ($newUsers.Count -eq 0) {
+    Write-Host "No new users found in group. Nothing to do."
+} else {
+    foreach ($userUPN in $newUsers) {
+        try {
+            Set-MgUserPhotoContent -UserId $userUPN -InFile $photoFilePath
+            Write-Host "Set photo for new user: $userUPN"
+        } catch {
+            Write-Host "Failed to set photo for $userUPN: $_"
+        }
+    }
+}
+
+# Save current members for next run
+$currentUPNs = $currentMembers | ForEach-Object {
+    $_.AdditionalProperties['userPrincipalName']
+}
+$currentUPNs | ConvertTo-Json | Set-Content -Path $snapshotPath -Encoding UTF8
