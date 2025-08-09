@@ -1,124 +1,519 @@
-# Run-MITSPhotos.ps1
-# One-shot: prompts user, connects to Graph (USGov) interactively, runs photo job for NEW members, exits.
+# Intune Audit (USGov) - Single Auth + GUI Progress + One Workbook per Section
+# Requires PowerShell 5.1+ (WinForms) or 7+. Launch with -STA.
+# Modules needed (install once):
+#   Install-Module Microsoft.Graph.Authentication,Microsoft.Graph.Beta.DeviceManagement,Microsoft.Graph.DeviceManagement,Microsoft.Graph.Groups,Microsoft.Graph.DeviceAppManagement -Scope CurrentUser
+#   Install-Module ImportExcel -Scope CurrentUser
 
-# ------------- Config -------------
-# Load only what we need
+# ---------------- Config ----------------
+$OutDir = "C:\IntuneExports"
+$UseCatalogDefinitions = $true   # Friendly names + Descriptions for Settings Catalog
+# Toggle sections (speed)
+$DoSettingsCatalog   = $true
+$DoLegacyDeviceCfg   = $true
+$DoCompliance        = $true
+$DoWindowsUpdate     = $true
+$DoEndpointSecurity  = $true
+$DoScriptsRemed      = $true
+$DoAutopilot         = $true
+$DoEnrollment        = $true
+$DoFiltersScope      = $true
+$DoRBAC              = $true
+$DoApps              = $true
+
+# ---------------- Modules ----------------
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+Import-Module Microsoft.Graph.Beta.DeviceManagement -ErrorAction Stop
+Import-Module Microsoft.Graph.DeviceManagement -ErrorAction Stop
 Import-Module Microsoft.Graph.Groups -ErrorAction Stop
-Import-Module Microsoft.Graph.Users -ErrorAction Stop
-# Optional: if you call Get-MgOrganization in Ensure-Graph
-# Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction Stop
+Import-Module Microsoft.Graph.DeviceAppManagement -ErrorAction SilentlyContinue
+Import-Module ImportExcel -ErrorAction Stop
 
+# ---------------- Helpers ----------------
+function Ensure-Dir($p){ if (-not (Test-Path $p)) { New-Item -Path $p -ItemType Directory -Force | Out-Null } }
 
+function Normalize-Value([object]$v){
+  $enabled = $null; $text = ""
+  if ($null -eq $v) { }
+  elseif ($v -is [bool]) { $enabled = $v; $text = $v.ToString() }
+  elseif ($v -is [string]) { if ($v -match '^(true|false)$') { $enabled = [bool]::Parse($v) }; $text = $v }
+  elseif ($v -is [System.Collections.IEnumerable] -and -not ($v -is [string])) { $text = ($v | ForEach-Object ToString) -join "; " }
+  else { try { $text = ($v | ConvertTo-Json -Compress -Depth 6) } catch { $text = $v.ToString() } }
+  [pscustomobject]@{ Text = $text; Enabled = $enabled }
+}
+function Resolve-AssignmentTarget { param($Target)
+  $t = $Target.OdataType
+  switch -Regex ($t) {
+    'allDevices' { 'All Devices' }
+    'allLicensedUsers|allUsers' { 'All Users' }
+    'groupAssignmentTarget' {
+      $gid = $Target.GroupId
+      try { (Get-MgGroup -GroupId $gid -ErrorAction Stop).DisplayName } catch { "Group:$gid" }
+    }
+    default { $t }
+  }
+}
+function Write-Sheet {
+  param([Parameter(Mandatory)]$Data,[Parameter(Mandatory)][string]$WorkbookPath,[Parameter(Mandatory)][string]$WorksheetName)
+  $name = $WorksheetName -replace '[:\\/?*\[\]]',''
+  if ($name.Length -gt 31) { $name = $name.Substring(0,31) }
+  $append = (Test-Path $WorkbookPath)
+  $Data | Export-Excel -Path $WorkbookPath -WorksheetName $name -AutoSize -FreezeTopRow -BoldTopRow -AutoFilter -Append:$append
+}
 
-$GroupName       = "DYN-ActiveUsers"
-$PhotoFilePath   = "C:\Scripts\android-chrome-512x512.png"
-$SnapshotPath    = "C:\Scripts\activeusers_snapshot.json"
-$GraphEnvironment = "USGov"
-
-# ------------- UI Prompt -------------
-# Requires -STA when launching PowerShell for reliable UI
+# ---------------- GUI ----------------
 Add-Type -AssemblyName System.Windows.Forms
-$rc = [System.Windows.Forms.MessageBox]::Show(
-    "Run the New Hire Photo job now?`nYou'll be prompted to sign in to Microsoft Graph ($GraphEnvironment).",
-    "Onboarding",
-    [System.Windows.Forms.MessageBoxButtons]::OKCancel,
-    [System.Windows.Forms.MessageBoxIcon]::Information
+Add-Type -AssemblyName System.Drawing
+
+# Confirm dialog (Yes/No)
+$resp = [System.Windows.Forms.MessageBox]::Show(
+  "Run Intune audit now? You'll sign in to Microsoft Graph (USGov).",
+  "Intune Audit",
+  [System.Windows.Forms.MessageBoxButtons]::YesNo,
+  [System.Windows.Forms.MessageBoxIcon]::Question
 )
-if ($rc -ne [System.Windows.Forms.DialogResult]::OK) {
-    Write-Host "Cancelled by user."
-    exit 0
+if ($resp -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+
+# Progress window
+$form = New-Object Windows.Forms.Form
+$form.Text = "Intune Audit (USGov)"
+$form.StartPosition = 'CenterScreen'
+$form.Width = 820; $form.Height = 520
+$form.TopMost = $true
+
+$label = New-Object Windows.Forms.Label
+$label.Text = "Status:"
+$label.AutoSize = $true
+$label.Left = 15; $label.Top = 15
+$form.Controls.Add($label)
+
+$phase = New-Object Windows.Forms.Label
+$phase.Text = "Starting…"
+$phase.AutoSize = $true
+$phase.Left = 75; $phase.Top = 15
+$form.Controls.Add($phase)
+
+$progress = New-Object Windows.Forms.ProgressBar
+$progress.Left = 15; $progress.Top = 45; $progress.Width = 770; $progress.Height = 22
+$progress.Style = 'Continuous'
+$progress.Minimum = 0; $progress.Maximum = 100; $progress.Value = 0
+$form.Controls.Add($progress)
+
+$log = New-Object Windows.Forms.RichTextBox
+$log.Left = 15; $log.Top = 80; $log.Width = 770; $log.Height = 360
+$log.ReadOnly = $true
+$form.Controls.Add($log)
+
+$btnClose = New-Object Windows.Forms.Button
+$btnClose.Text = "Close"
+$btnClose.Left = 700; $btnClose.Top = 450
+$btnClose.Enabled = $false
+$btnClose.Add_Click({ $form.Close() })
+$form.Controls.Add($btnClose)
+
+function UI-Update([int]$pct,[string]$ph,[string]$msg){
+  if ($pct -lt 0) { $pct = 0 } elseif ($pct -gt 100) { $pct = 100 }
+  $progress.Value = $pct
+  if ($ph) { $phase.Text = $ph }
+  if ($msg) { $log.AppendText(("{0} {1}`r`n" -f ((Get-Date).ToString("HH:mm:ss")), $msg)) }
+  [System.Windows.Forms.Application]::DoEvents()
 }
 
-# ------------- Graph Helpers -------------
-function Ensure-Graph {
-    $scopes = @("User.ReadWrite.All","GroupMember.Read.All","Group.Read.All")
+$form.Show()
+[System.Windows.Forms.Application]::DoEvents()
 
-    # Check current context
-    try { $ctx = Get-MgContext -ErrorAction Stop } catch { $ctx = $null }
+# ---------------- Auth (single) ----------------
+UI-Update 2 "Authenticating" "Connecting to Microsoft Graph (USGov)…"
+$Scopes = @(
+  "DeviceManagementConfiguration.Read.All",
+  "DeviceManagementServiceConfig.Read.All",
+  "DeviceManagementRBAC.Read.All",
+  "DeviceManagementManagedDevices.Read.All",
+  "Device.Read.All",
+  "Group.Read.All",
+  "DeviceManagementApps.Read.All"
+)
+try {
+  Connect-MgGraph -Environment USGov -Scopes $Scopes -NoWelcome | Out-Null
+  $ctx = Get-MgContext
+  UI-Update 5 "Authenticated" ("Signed in as: {0} (Tenant {1})" -f $ctx.Account, $ctx.TenantId)
+} catch {
+  UI-Update 0 "Auth Failed" "Connection failed: $($_.Exception.Message)"
+  $btnClose.Enabled = $true
+  return
+}
 
-    $needConnect = $true
-    if ($ctx) {
-        $envOk = ($ctx.Environment -eq $GraphEnvironment)
-        # basic scope check
-        $scopeSet = @($ctx.Scopes | ForEach-Object { $_.ToLower() })
-        $scopesOk = ($scopes | ForEach-Object { $scopeSet -contains $_.ToLower() }) -notcontains $false
-        $needConnect = -not ($envOk -and $scopesOk)
+# ---------------- Run Sections (sequential) ----------------
+Ensure-Dir $OutDir
 
-        if (-not $needConnect) {
-            try { Get-MgOrganization -ErrorAction Stop | Out-Null } catch { $needConnect = $true }
-        }
-    }
+# Count enabled sections to scale progress
+$sections = @()
+if ($DoSettingsCatalog)   { $sections += "Settings Catalog" }
+if ($DoLegacyDeviceCfg)   { $sections += "Legacy Device Config" }
+if ($DoCompliance)        { $sections += "Compliance" }
+if ($DoWindowsUpdate)     { $sections += "Windows Update" }
+if ($DoEndpointSecurity)  { $sections += "Endpoint Security" }
+if ($DoScriptsRemed)      { $sections += "Scripts/Remediations" }
+if ($DoAutopilot)         { $sections += "Autopilot" }
+if ($DoEnrollment)        { $sections += "Enrollment" }
+if ($DoFiltersScope)      { $sections += "Filters/Scope Tags" }
+if ($DoRBAC)              { $sections += "RBAC" }
+if ($DoApps)              { $sections += "Apps" }
 
-    if ($needConnect) {
-        Connect-MgGraph -Environment $GraphEnvironment -Scopes $scopes -NoWelcome
-    }
+if ($sections.Count -eq 0) {
+  UI-Update 100 "Done" "No sections enabled. Nothing to do."
+  $btnClose.Enabled = $true
+  return
+}
 
-    # Log current context
+# progress allocation
+$basePct = 5
+$spanPct = 95
+$perSection = [math]::Floor($spanPct / $sections.Count)
+$cursor = $basePct
+
+# --- SECTION: Settings Catalog ---
+if ($DoSettingsCatalog) {
+  $name = "Settings Catalog"
+  $wb = Join-Path $OutDir "Intune_SettingsCatalog.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting policies…"
+
+  $policies = @()
+  try { $policies = Get-MgBetaDeviceManagementConfigurationPolicy -All } catch { UI-Update $cursor $name "Warning: failed to list policies: $($_.Exception.Message)" }
+
+  $defs = @{}
+  if ($UseCatalogDefinitions) {
+    UI-Update $cursor $name "Fetching setting definitions (for names + descriptions)…"
     try {
-        $ctx = Get-MgContext
-        Write-Host ("Graph context: Account={0} Tenant={1} Env={2}" -f $ctx.Account, $ctx.TenantId, $ctx.Environment)
+      $allDefs = Get-MgBetaDeviceManagementConfigurationSettingDefinition -All
+      foreach ($d in $allDefs) { $defs[$d.Id] = $d }
     } catch {
-        Write-Host "Failed to read Graph context: $($_.Exception.Message)"
-        throw
+      UI-Update $cursor $name "Definitions fetch failed; descriptions may be blank."
     }
-}
+  }
 
-# ------------- Job Logic -------------
-function Run-SetPhotoForNewGroupMembers {
-    if (!(Test-Path $PhotoFilePath)) {
-        Write-Host "❌ Photo file not found: $PhotoFilePath"
-        return
-    }
+  $assignRows = New-Object System.Collections.Generic.List[object]
+  $total = [Math]::Max(1,$policies.Count); $i=0
+  foreach ($p in $policies) {
+    $i++
+    $pct = $cursor + [int](($i/$total) * ($perSection-5))
+    UI-Update $pct $name ("Processing: {0}" -f $p.Name)
 
-    Ensure-Graph
+    $policyId = $p.Id; $policyName = $p.Name
+    $settings = @(); try { $settings = Get-MgBetaDeviceManagementConfigurationPolicySetting -DeviceManagementConfigurationPolicyId $policyId -All } catch {}
 
-    $group = Get-MgGroup -Filter "DisplayName eq '$GroupName'"
-    if (-not $group) {
-        Write-Host "❌ Group '$GroupName' not found."
-        return
-    }
-
-    # Load previous snapshot (if any)
-    $prevMembers = @()
-    if (Test-Path $SnapshotPath) {
-        try { $prevMembers = Get-Content $SnapshotPath | ConvertFrom-Json } catch { $prevMembers = @() }
-    }
-
-    # Current members (users only)
-    $currentMembers = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
-        $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
-    }
-
-    # Find new users by UPN
-    $newUsers = @()
-    foreach ($m in $currentMembers) {
-        $upn = $m.AdditionalProperties['userPrincipalName']
-        if ($prevMembers -notcontains $upn) { $newUsers += $upn }
-    }
-
-    if ($newUsers.Count -eq 0) {
-        Write-Host "⏱️ No new users found in '$GroupName'. Nothing to do."
+    $rows = New-Object System.Collections.Generic.List[object]
+    if ($settings.Count -eq 0) {
+      $rows.Add([pscustomobject]@{ SettingPath=""; SettingName=""; Value=""; Enabled=$null; Description="" })
     } else {
-        foreach ($upn in $newUsers) {
-            try {
-                Set-MgUserPhotoContent -UserId $upn -InFile $PhotoFilePath
-                Write-Host "✅ Set photo for new user: $upn"
-            } catch {
-                Write-Host "❌ Failed to set photo for $upn $($_.Exception.Message)"
-            }
-        }
-    }
+      foreach ($s in $settings) {
+        $defId = $s.Setting.DefinitionId
+        $settingPath = $s.Setting.SettingInstanceTemplateReferenceName
+        if ([string]::IsNullOrWhiteSpace($settingPath)) { $settingPath = $s.Setting.AdditionalProperties.displayName }
 
-    # Save current snapshot
-    $currentUPNs = $currentMembers | ForEach-Object { $_.AdditionalProperties['userPrincipalName'] }
-    try {
-        $currentUPNs | ConvertTo-Json | Set-Content -Path $SnapshotPath -Encoding UTF8
-        Write-Host "💾 Snapshot updated: $SnapshotPath"
-    } catch {
-        Write-Host "⚠️ Failed to write snapshot: $($_.Exception.Message)"
+        $settingName = $defId; $desc = ""
+        if ($defs.ContainsKey($defId)) {
+          $settingName = $defs[$defId].DisplayName
+          if ([string]::IsNullOrWhiteSpace($settingPath)) { $settingPath = $defs[$defId].CategoryPath }
+          $desc = $defs[$defId].Description
+        } elseif ($s.Setting.AdditionalProperties.displayName) {
+          $settingName = $s.Setting.AdditionalProperties.displayName
+        }
+
+        $val = $null
+        if ($s.SettingInstance) {
+          if ($s.SettingInstance.SimpleSettingValue) { $val = $s.SettingInstance.SimpleSettingValue.Value }
+          elseif ($s.SettingInstance.SimpleSettingCollectionValue) { $val = $s.SettingInstance.SimpleSettingCollectionValue.Value }
+          elseif ($s.SettingInstance.ChoiceSettingValue) { $val = $s.SettingInstance.ChoiceSettingValue.ChoiceValue }
+          else { $val = $s.SettingInstance.AdditionalProperties.value; if (-not $val) { $val = $s.SettingInstance } }
+        }
+        $norm = Normalize-Value $val
+
+        $rows.Add([pscustomobject]@{
+          SettingPath = $settingPath
+          SettingName = $settingName
+          Value       = $norm.Text
+          Enabled     = $norm.Enabled
+          Description = $desc
+        })
+      }
     }
+    Write-Sheet -Data $rows -WorkbookPath $wb -WorksheetName $policyName
+
+    $targets = @()
+    try { $as = Get-MgBetaDeviceManagementConfigurationPolicyAssignment -DeviceManagementConfigurationPolicyId $policyId -All
+          foreach ($a in $as) { $targets += (Resolve-AssignmentTarget $a.Target) } } catch {}
+    $assignRows.Add([pscustomobject]@{
+      ProfileName = $policyName
+      AssignedTo  = ($targets | Select-Object -Unique) -join '; '
+    })
+  }
+
+  UI-Update ($cursor + $perSection - 2) $name "Writing assignments sheet…"
+  if ($assignRows.Count -eq 0) { $assignRows.Add([pscustomobject]@{ ProfileName=""; AssignedTo="" }) }
+  Write-Sheet -Data ($assignRows | Sort-Object ProfileName) -WorkbookPath $wb -WorksheetName "Assignments"
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_SettingsCatalog.xlsx"
+  $cursor += $perSection
 }
 
-# ------------- Run -------------
-Run-SetPhotoForNewGroupMembers
+# --- SECTION: Legacy Device Config ---
+if ($DoLegacyDeviceCfg) {
+  $name = "Legacy Device Config"
+  $wb = Join-Path $OutDir "Intune_DeviceConfig_Legacy.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting profiles…"
+
+  $legacy = @()
+  try { $legacy = Get-MgDeviceManagementDeviceConfiguration -All } catch { UI-Update $cursor $name "Warning: $($_.Exception.Message)" }
+
+  $assignRows = New-Object System.Collections.Generic.List[object]
+  $total = [Math]::Max(1,$legacy.Count); $i=0
+  foreach ($lp in $legacy) {
+    $i++; $pct = $cursor + [int](($i/$total) * ($perSection-5))
+    UI-Update $pct $name ("Processing: {0}" -f $lp.DisplayName)
+
+    $policyId = $lp.Id; $policyName = $lp.DisplayName
+    $props = @{}
+    $lp.PSObject.Properties | ForEach-Object {
+      if ($_ -and $_.Name -and $_.Value -ne $null) {
+        $n = $_.Name
+        if ($n -in @('Id','DisplayName','Description','Version','OdataType','CreatedDateTime','LastModifiedDateTime','Assignments','@odata.type')) { return }
+        $props[$n] = $_.Value
+      }
+    }
+    $rows = New-Object System.Collections.Generic.List[object]
+    if ($props.Count -eq 0) {
+      $rows.Add([pscustomobject]@{ SettingPath=""; SettingName=""; Value=""; Enabled=$null; Description="" })
+    } else {
+      foreach ($kvp in $props.GetEnumerator()) {
+        $norm = Normalize-Value $kvp.Value
+        $rows.Add([pscustomobject]@{
+          SettingPath = ""
+          SettingName = $kvp.Key
+          Value       = $norm.Text
+          Enabled     = $norm.Enabled
+          Description = ""
+        })
+      }
+    }
+    Write-Sheet -Data $rows -WorkbookPath $wb -WorksheetName $policyName
+
+    $targets = @()
+    try { $as = Get-MgDeviceManagementDeviceConfigurationAssignment -DeviceConfigurationId $policyId -All
+          foreach ($a in $as) { $targets += (Resolve-AssignmentTarget $a.Target) } } catch {}
+    $assignRows.Add([pscustomobject]@{
+      ProfileName = $policyName
+      AssignedTo  = ($targets | Select-Object -Unique) -join '; '
+    })
+  }
+
+  UI-Update ($cursor + $perSection - 2) $name "Writing assignments sheet…"
+  if ($assignRows.Count -eq 0) { $assignRows.Add([pscustomobject]@{ ProfileName=""; AssignedTo="" }) }
+  Write-Sheet -Data ($assignRows | Sort-Object ProfileName) -WorkbookPath $wb -WorksheetName "Assignments"
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_DeviceConfig_Legacy.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Compliance ---
+if ($DoCompliance) {
+  $name = "Compliance"
+  $wb = Join-Path $OutDir "Intune_Compliance.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting policies…"
+
+  $comp = @(); try { $comp = Get-MgDeviceManagementDeviceCompliancePolicy -All } catch {}
+  $rows = New-Object System.Collections.Generic.List[object]
+  $total=[Math]::Max(1,$comp.Count); $i=0
+  foreach ($c in $comp) {
+    $i++; $pct=$cursor + [int](($i/$total) * ($perSection-5))
+    UI-Update $pct $name ("Processing: {0}" -f $c.DisplayName)
+    $targets=@()
+    try { $as = Get-MgDeviceManagementDeviceCompliancePolicyAssignment -DeviceCompliancePolicyId $c.Id -All
+          foreach ($a in $as) { $targets += (Resolve-AssignmentTarget $a.Target) } } catch {}
+    $rows.Add([pscustomobject]@{
+      PolicyName=$c.DisplayName; PolicyId=$c.Id; Platform=$c.OdataType; AssignedTo=($targets | Select-Object -Unique) -join '; '
+    })
+  }
+  if ($rows.Count -eq 0) { $rows.Add([pscustomobject]@{}) }
+  Write-Sheet -Data $rows -WorkbookPath $wb -WorksheetName "Compliance"
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_Compliance.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Windows Update ---
+if ($DoWindowsUpdate) {
+  $name = "Windows Update"
+  $wb = Join-Path $OutDir "Intune_WindowsUpdate.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting WUFB Rings…"
+
+  $wur = @(); try { $wur = Get-MgDeviceManagementDeviceConfiguration -All | Where-Object { $_.OdataType -match "windowsUpdateForBusinessConfiguration" } } catch {}
+  Write-Sheet -Data ($wur | Select-Object DisplayName,Id,OdataType) -WorkbookPath $wb -WorksheetName "WU_Rings"
+
+  UI-Update ($cursor + [int]($perSection*0.5)) $name "Feature/Quality/Driver profiles…"
+  try { $wf = Get-MgBetaDeviceManagementWindowsFeatureUpdateProfile -All
+        Write-Sheet -Data ($wf | Select-Object DisplayName,Id,ReleaseType,RoleScopeTagIds) -WorkbookPath $wb -WorksheetName "WU_Feature" } catch {}
+  try { $wq = Get-MgBetaDeviceManagementWindowsQualityUpdateProfile -All
+        Write-Sheet -Data ($wq | Select-Object DisplayName,Id,Description,RoleScopeTagIds) -WorkbookPath $wb -WorksheetName "WU_Quality" } catch {}
+  try { $wd = Get-MgBetaDeviceManagementWindowsDriverUpdateProfile -All
+        Write-Sheet -Data ($wd | Select-Object DisplayName,Id,ApprovalType,RoleScopeTagIds) -WorkbookPath $wb -WorksheetName "WU_Driver" } catch {}
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_WindowsUpdate.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Endpoint Security ---
+if ($DoEndpointSecurity) {
+  $name = "Endpoint Security"
+  $wb = Join-Path $OutDir "Intune_EndpointSecurity.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting intents…"
+
+  try {
+    $intents = Get-MgBetaDeviceManagementIntent -All
+    $rows = New-Object System.Collections.Generic.List[object]
+    $total=[Math]::Max(1,$intents.Count); $i=0
+    foreach ($it in $intents) {
+      $i++; $pct=$cursor + [int](($i/$total) * ($perSection-5))
+      UI-Update $pct $name ("Processing: {0}" -f $it.DisplayName)
+      $targets=@(); try { $as = Get-MgBetaDeviceManagementIntentAssignment -DeviceManagementIntentId $it.Id -All
+                          foreach ($a in $as) { $targets += (Resolve-AssignmentTarget $a.Target) } } catch {}
+      $rows.Add([pscustomobject]@{ Name=$it.DisplayName; Id=$it.Id; TemplateId=$it.TemplateId; AssignedTo=($targets | Select-Object -Unique) -join '; ' })
+    }
+    if ($rows.Count -eq 0) { $rows = ,([pscustomobject]@{}) }
+    Write-Sheet -Data $rows -WorkbookPath $wb -WorksheetName "EndpointSecurity"
+  } catch {
+    UI-Update $cursor $name "Warning: $($_.Exception.Message)"
+  }
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_EndpointSecurity.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Scripts & Remediations ---
+if ($DoScriptsRemed) {
+  $name = "Scripts/Remediations"
+  $wb = Join-Path $OutDir "Intune_Scripts_Remediations.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting…"
+
+  try { $winScripts = Get-MgDeviceManagementScript -All | Select-Object DisplayName,Id,FileName,RunAsAccount,EnforceSignatureCheck
+        Write-Sheet -Data $winScripts -WorkbookPath $wb -WorksheetName "Win_PSScripts" } catch {}
+  try { $macScripts = Get-MgDeviceManagementShellScript -All | Select-Object DisplayName,Id,FileName,RunAsAccount
+        Write-Sheet -Data $macScripts -WorkbookPath $wb -WorksheetName "macOS_ShellScripts" } catch {}
+  try { $remed = Get-MgBetaDeviceManagementDeviceHealthScript -All | Select-Object DisplayName,Id,Publisher,LastModifiedDateTime
+        Write-Sheet -Data $remed -WorkbookPath $wb -WorksheetName "ProactiveRemediation" } catch {}
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_Scripts_Remediations.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Autopilot ---
+if ($DoAutopilot) {
+  $name = "Autopilot"
+  $wb = Join-Path $OutDir "Intune_Autopilot.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting profiles/devices…"
+
+  try { $apProfiles = Get-MgBetaDeviceManagementWindowsAutopilotDeploymentProfile -All | Select-Object DisplayName,Id,Description,EnrollmentStatusScreenSettings
+        Write-Sheet -Data $apProfiles -WorkbookPath $wb -WorksheetName "Profiles" } catch {}
+  try { $apDevices = Get-MgBetaDeviceManagementWindowsAutopilotDeviceIdentity -All | Select-Object Id,DisplayName,SerialNumber,Manufacturer,Model,DeploymentProfileAssignmentStatus
+        Write-Sheet -Data $apDevices -WorkbookPath $wb -WorksheetName "Devices" } catch {}
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_Autopilot.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Enrollment ---
+if ($DoEnrollment) {
+  $name = "Enrollment"
+  $wb = Join-Path $OutDir "Intune_Enrollment.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting enrollment configs…"
+
+  try {
+    $enrollCfg = Get-MgDeviceManagementDeviceEnrollmentConfiguration -All |
+      Select-Object Id,DisplayName,Description,OdataType,Priority
+    Write-Sheet -Data $enrollCfg -WorkbookPath $wb -WorksheetName "Enrollment_Configs"
+  } catch {
+    UI-Update $cursor $name "Warning: $($_.Exception.Message)"
+  }
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_Enrollment.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Filters & Scope Tags ---
+if ($DoFiltersScope) {
+  $name = "Filters/Scope Tags"
+  $wb = Join-Path $OutDir "Intune_Filters_ScopeTags.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting filters/tags…"
+
+  try { $filters = Get-MgBetaDeviceManagementAssignmentFilter -All | Select-Object Id,DisplayName,Platform,Rule
+        Write-Sheet -Data $filters -WorkbookPath $wb -WorksheetName "AssignmentFilters" } catch {}
+  try { $tags = Get-MgDeviceManagementRoleScopeTag -All | Select-Object Id,DisplayName,Description
+        Write-Sheet -Data $tags -WorkbookPath $wb -WorksheetName "ScopeTags" } catch {}
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_Filters_ScopeTags.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: RBAC ---
+if ($DoRBAC) {
+  $name = "RBAC"
+  $wb = Join-Path $OutDir "Intune_RBAC.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting roles/assignments…"
+
+  try {
+    $roles = Get-MgDeviceManagementRoleDefinition -All | Select-Object Id,DisplayName,Description,IsBuiltIn
+    Write-Sheet -Data $roles -WorkbookPath $wb -WorksheetName "RoleDefinitions"
+    $assigns = Get-MgDeviceManagementRoleAssignment -All | Select-Object Id,DisplayName,RoleDefinitionId,ScopeMembers,Members
+    Write-Sheet -Data $assigns -WorkbookPath $wb -WorksheetName "RoleAssignments"
+  } catch {
+    UI-Update $cursor $name "Warning: $($_.Exception.Message)"
+  }
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_RBAC.xlsx"
+  $cursor += $perSection
+}
+
+# --- SECTION: Apps ---
+if ($DoApps) {
+  $name = "Apps"
+  $wb = Join-Path $OutDir "Intune_Apps.xlsx"
+  if (Test-Path $wb) { Remove-Item $wb -Force }
+  UI-Update $cursor $name "Collecting apps…"
+
+  try {
+    $apps = Get-MgDeviceAppManagementMobileApp -All | Select-Object Id,DisplayName,Publisher,IsFeatured,CreatedDateTime,LastModifiedDateTime,AdditionalProperties
+    Write-Sheet -Data $apps -WorkbookPath $wb -WorksheetName "Apps"
+
+    $appAssign = New-Object System.Collections.Generic.List[object]
+    $total=[Math]::Max(1,$apps.Count); $i=0
+    foreach ($a in $apps) {
+      $i++; $pct=$cursor + [int](($i/$total) * ($perSection-10))
+      UI-Update $pct $name ("Assignments: {0}" -f $a.DisplayName)
+      try {
+        $as = Get-MgDeviceAppManagementMobileAppAssignment -MobileAppId $a.Id -All
+        $targets = @()
+        foreach ($t in $as) { $targets += (Resolve-AssignmentTarget $t.Target) }
+        $appAssign.Add([pscustomobject]@{
+          AppName = $a.DisplayName; AppId=$a.Id; AssignedTo = ($targets | Select-Object -Unique) -join '; '
+        })
+      } catch {}
+    }
+    if ($appAssign.Count -eq 0) { $appAssign.Add([pscustomobject]@{}) }
+    Write-Sheet -Data $appAssign -WorkbookPath $wb -WorksheetName "App_Assignments"
+  } catch {
+    UI-Update $cursor $name "Warning: $($_.Exception.Message)"
+  }
+
+  UI-Update ($cursor + $perSection) $name "Saved: Intune_Apps.xlsx"
+  $cursor += $perSection
+}
+
+# ---------------- Done ----------------
+UI-Update 100 "Done" ("All sections exported to {0}" -f $OutDir)
+$btnClose.Enabled = $true
