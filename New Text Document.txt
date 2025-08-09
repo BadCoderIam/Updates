@@ -1,61 +1,134 @@
-# Set-PhotoForNewGroupMembers.ps1
+# Run-NewHirePhotoJob.ps1
+# One-shot: prompts user, connects to Graph (USGov) interactively,
+# checks EVERY member of the group, skips if photo already matches,
+# applies photo if missing/different, then exits.
 
-# Connect to Graph
-Connect-MgGraph -Environment USGov -Scopes "User.ReadWrite.All", "GroupMember.Read.All", "Group.Read.All"
+# -------- Modules (minimal) --------
+Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+Import-Module Microsoft.Graph.Groups -ErrorAction Stop
+Import-Module Microsoft.Graph.Users -ErrorAction Stop
+# Optional if you call Get-MgOrganization in Ensure-Graph:
+# Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction Stop
 
-# Config
-$groupName = "DYN-ActiveUsers"
-$photoFilePath = "C:\ADMX\android-chrome-512x512.png"
-$snapshotPath = "C:\scripts\activeusers_snapshot.json"
+# -------- Config --------
+$GroupName        = "DYN-ActiveUsers"
+$PhotoFilePath    = "C:\Scripts\android-chrome-512x512.png"
+$SnapshotPath     = "C:\Scripts\activeusers_snapshot.json"
+$GraphEnvironment = "USGov"
 
-# Validate photo file exists
-if (!(Test-Path $photoFilePath)) {
-    Write-Host "Photo file not found: $photoFilePath" -ForegroundColor Red
-    exit
-}
+# -------- UI Prompt (requires -STA) --------
+Add-Type -AssemblyName System.Windows.Forms
+$rc = [System.Windows.Forms.MessageBox]::Show(
+    "Run the Photo job now?`nYou'll be prompted to sign in to Microsoft Graph ($GraphEnvironment).",
+    "Onboarding",
+    [System.Windows.Forms.MessageBoxButtons]::OKCancel,
+    [System.Windows.Forms.MessageBoxIcon]::Information
+)
+if ($rc -ne [System.Windows.Forms.DialogResult]::OK) { Write-Host "Cancelled by user."; exit 0 }
 
-# Get group
-$group = Get-MgGroup -Filter "DisplayName eq '$groupName'"
-if (-not $group) {
-    Write-Host "Group '$groupName' not found." -ForegroundColor Red
-    exit
-}
+# -------- Graph Helpers --------
+function Ensure-Graph {
+    $scopes = @("User.ReadWrite.All","GroupMember.Read.All","Group.Read.All")
 
-# Load previous snapshot (if exists)
-$prevMembers = @()
-if (Test-Path $snapshotPath) {
-    $prevMembers = Get-Content $snapshotPath | ConvertFrom-Json
-}
-
-# Get current members
-$currentMembers = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
-    $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
-}
-
-# Get list of new users
-$newUsers = @()
-foreach ($member in $currentMembers) {
-    $userUPN = $member.AdditionalProperties['userPrincipalName']
-    if ($prevMembers -notcontains $userUPN) {
-        $newUsers += $userUPN
-    }
-}
-
-if ($newUsers.Count -eq 0) {
-    Write-Host "No new users found in group. Nothing to do."
-} else {
-    foreach ($userUPN in $newUsers) {
-        try {
-            Set-MgUserPhotoContent -UserId $userUPN -InFile $photoFilePath
-            Write-Host "Set photo for new user: $userUPN"
-        } catch {
-            Write-Host "Failed to set photo for $userUPN: $_"
+    try { $ctx = Get-MgContext -ErrorAction Stop } catch { $ctx = $null }
+    $needConnect = $true
+    if ($ctx) {
+        $envOk = ($ctx.Environment -eq $GraphEnvironment)
+        $scopeSet = @($ctx.Scopes | ForEach-Object { $_.ToLower() })
+        $scopesOk = ($scopes | ForEach-Object { $scopeSet -contains $_.ToLower() }) -notcontains $false
+        $needConnect = -not ($envOk -and $scopesOk)
+        if (-not $needConnect) {
+            try { Get-MgOrganization -ErrorAction Stop | Out-Null } catch { $needConnect = $true }
         }
     }
+    if ($needConnect) {
+        Connect-MgGraph -Environment $GraphEnvironment -Scopes $scopes -NoWelcome
+    }
+    try {
+        $ctx = Get-MgContext
+        Write-Host ("Graph context: Account={0} Tenant={1} Env={2}" -f $ctx.Account, $ctx.TenantId, $ctx.Environment)
+    } catch { Write-Host "Failed to read Graph context: $($_.Exception.Message)"; throw }
 }
 
-# Save current members for next run
-$currentUPNs = $currentMembers | ForEach-Object {
-    $_.AdditionalProperties['userPrincipalName']
+# -------- Job Logic (updated) --------
+function Run-SetPhotoForGroupMembers {
+    if (!(Test-Path $PhotoFilePath)) {
+        Write-Host "❌ Photo file not found: $PhotoFilePath"
+        return
+    }
+
+    Ensure-Graph
+
+    # Precompute reference hash once
+    $refHash = (Get-FileHash -Path $PhotoFilePath -Algorithm MD5).Hash
+
+    # Get group
+    $group = Get-MgGroup -Filter "DisplayName eq '$GroupName'"
+    if (-not $group) { Write-Host "❌ Group '$GroupName' not found."; return }
+
+    # Load previous snapshot (for info/logging only)
+    $prevMembers = @()
+    if (Test-Path $SnapshotPath) {
+        try { $prevMembers = Get-Content $SnapshotPath | ConvertFrom-Json } catch { $prevMembers = @() }
+    }
+
+    # Current members (users only)
+    $currentMembers = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
+        $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
+    }
+
+    $currentUPNs = @()
+    $updated = 0; $skipped = 0; $errors = 0
+
+    foreach ($m in $currentMembers) {
+        $upn = $m.AdditionalProperties['userPrincipalName']
+        if ([string]::IsNullOrWhiteSpace($upn)) { continue }
+        $currentUPNs += $upn
+
+        try {
+            # Try to fetch current photo
+            $tmp = Join-Path $env:TEMP ("photo_{0}.img" -f ([Guid]::NewGuid().ToString("N")))
+            $hasPhoto = $true
+            try {
+                Get-MgUserPhotoContent -UserId $upn -OutFile $tmp -ErrorAction Stop
+            } catch {
+                $hasPhoto = $false
+            }
+
+            $needsUpdate = $true
+            if ($hasPhoto -and (Test-Path $tmp)) {
+                $currHash = (Get-FileHash -Path $tmp -Algorithm MD5).Hash
+                if ($currHash -eq $refHash) {
+                    Write-Host "⏭️  Skipping $upn (photo already matches)"
+                    $needsUpdate = $false
+                    $skipped++
+                }
+            }
+
+            if ($needsUpdate) {
+                Set-MgUserPhotoContent -UserId $upn -InFile $PhotoFilePath
+                Write-Host "✅ Applied photo: $upn"
+                $updated++
+            }
+        } catch {
+            Write-Host "❌ Error on $upn: $($_.Exception.Message)"
+            $errors++
+        } finally {
+            if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+            Start-Sleep -Milliseconds 150   # gentle pacing
+        }
+    }
+
+    # Save snapshot to reflect current membership
+    try {
+        $currentUPNs | ConvertTo-Json | Set-Content -Path $SnapshotPath -Encoding UTF8
+        Write-Host "💾 Snapshot updated: $SnapshotPath"
+    } catch {
+        Write-Host "⚠️ Failed to write snapshot: $($_.Exception.Message)"
+    }
+
+    Write-Host ("Summary: Updated={0} Skipped={1} Errors={2}" -f $updated, $skipped, $errors)
 }
-$currentUPNs | ConvertTo-Json | Set-Content -Path $snapshotPath -Encoding UTF8
+
+# -------- Run --------
+Run-SetPhotoForGroupMembers
