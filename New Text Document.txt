@@ -1,7 +1,7 @@
 # Run-NewHirePhotoJob.ps1
 # One-shot: prompts user, connects to Graph (USGov) interactively,
-# checks EVERY member of the group, skips if photo already matches,
-# applies photo if missing/different, then exits.
+# Applies the standard PNG to group members only when needed,
+# Avoids downloading user photos; uses snapshot of last applied hash + periodic recheck.
 
 # -------- Modules (minimal) --------
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
@@ -15,8 +15,9 @@ $GroupName        = "DYN-ActiveUsers"
 $PhotoFilePath    = "C:\Scripts\android-chrome-512x512.png"
 $SnapshotPath     = "C:\Scripts\activeusers_snapshot.json"
 $GraphEnvironment = "USGov"
+$RecheckDays      = 30     # Days after which we re-apply even if snapshot matches (0 = never recheck)
 
-# -------- UI Prompt (requires -STA) --------
+# -------- UI Prompt (requires -STA in launcher) --------
 Add-Type -AssemblyName System.Windows.Forms
 $rc = [System.Windows.Forms.MessageBox]::Show(
     "Run the Photo job now?`nYou'll be prompted to sign in to Microsoft Graph ($GraphEnvironment).",
@@ -50,78 +51,136 @@ function Ensure-Graph {
     } catch { Write-Host "Failed to read Graph context: $($_.Exception.Message)"; throw }
 }
 
-# -------- Job Logic (updated) --------
-function Run-SetPhotoForGroupMembers {
-    if (!(Test-Path $PhotoFilePath)) {
-        Write-Host "❌ Photo file not found: $PhotoFilePath"
-        return
+# -------- Snapshot helpers (map of UPN -> object) --------
+function Load-Snapshot {
+    if (Test-Path $SnapshotPath) {
+        try {
+            $raw = Get-Content $SnapshotPath -Raw
+            if (-not $raw) { return @{} }
+            $json = $raw | ConvertFrom-Json
+            # Support legacy array format (list of UPNs)
+            if ($json -is [System.Collections.IEnumerable] -and -not ($json.PSObject.Properties.Name -contains 'PSObject')) {
+                $map = @{}
+                foreach ($upn in $json) {
+                    $map[$upn] = [ordered]@{
+                        lastHash        = $null
+                        lastSetUtc      = $null
+                        lastVerifiedUtc = $null
+                    }
+                }
+                return $map
+            }
+            # If already an object/dictionary
+            if ($json -is [hashtable] -or $json.PSObject.Properties.Count -gt 0) {
+                # Convert PSCustomObject to hashtable
+                $map = @{}
+                foreach ($p in $json.PSObject.Properties) {
+                    $map[$p.Name] = $p.Value
+                }
+                return $map
+            }
+            return @{}
+        } catch {
+            Write-Host "⚠️ Failed to parse snapshot, starting fresh: $($_.Exception.Message)"
+            return @{}
+        }
+    } else {
+        return @{}
     }
+}
+
+function Save-Snapshot($map) {
+    # Ensure it's serializable
+    $obj = [ordered]@{}
+    foreach ($k in $map.Keys) {
+        $obj[$k] = $map[$k]
+    }
+    $obj | ConvertTo-Json -Depth 6 | Set-Content -Path $SnapshotPath -Encoding UTF8
+}
+
+# -------- Job Logic (fast path, no downloads) --------
+function Run-SetPhotoForGroupMembers {
+    if (!(Test-Path $PhotoFilePath)) { Write-Host "❌ Photo file not found: $PhotoFilePath"; return }
 
     Ensure-Graph
 
     # Precompute reference hash once
     $refHash = (Get-FileHash -Path $PhotoFilePath -Algorithm MD5).Hash
+    $nowUtc  = [DateTime]::UtcNow
+
+    # Load snapshot map
+    $snap = Load-Snapshot
 
     # Get group
     $group = Get-MgGroup -Filter "DisplayName eq '$GroupName'"
     if (-not $group) { Write-Host "❌ Group '$GroupName' not found."; return }
 
-    # Load previous snapshot (for info/logging only)
-    $prevMembers = @()
-    if (Test-Path $SnapshotPath) {
-        try { $prevMembers = Get-Content $SnapshotPath | ConvertFrom-Json } catch { $prevMembers = @() }
-    }
-
     # Current members (users only)
-    $currentMembers = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
+    $members = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
         $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
     }
 
-    $currentUPNs = @()
     $updated = 0; $skipped = 0; $errors = 0
 
-    foreach ($m in $currentMembers) {
+    foreach ($m in $members) {
         $upn = $m.AdditionalProperties['userPrincipalName']
         if ([string]::IsNullOrWhiteSpace($upn)) { continue }
-        $currentUPNs += $upn
 
+        # Snapshot entry
+        if (-not $snap.ContainsKey($upn)) {
+            $snap[$upn] = [ordered]@{
+                lastHash        = $null
+                lastSetUtc      = $null
+                lastVerifiedUtc = $null
+            }
+        }
+
+        $entry = $snap[$upn]
+        $lastHash = $entry.lastHash
+        $lastVerifiedUtc = $entry.lastVerifiedUtc
+
+        # Decide if we can SKIP without any API:
+        $withinRecheck = $false
+        if ($RecheckDays -gt 0 -and $lastVerifiedUtc) {
+            $withinRecheck = ($nowUtc - [datetime]$lastVerifiedUtc).TotalDays -lt $RecheckDays
+        } elseif ($RecheckDays -eq 0) {
+            $withinRecheck = $true
+        }
+
+        if ($lastHash -eq $refHash -and $withinRecheck) {
+            # Trust snapshot; no API call
+            Write-Host "⏭️  Skipping $upn (snapshot says photo already applied; within recheck window)"
+            $skipped++
+            continue
+        }
+
+        # Enforce standard image with ONE API call (upload only)
         try {
-            # Try to fetch current photo
-            $tmp = Join-Path $env:TEMP ("photo_{0}.img" -f ([Guid]::NewGuid().ToString("N")))
-            $hasPhoto = $true
-            try {
-                Get-MgUserPhotoContent -UserId $upn -OutFile $tmp -ErrorAction Stop
-            } catch {
-                $hasPhoto = $false
-            }
-
-            $needsUpdate = $true
-            if ($hasPhoto -and (Test-Path $tmp)) {
-                $currHash = (Get-FileHash -Path $tmp -Algorithm MD5).Hash
-                if ($currHash -eq $refHash) {
-                    Write-Host "⏭️  Skipping $upn (photo already matches)"
-                    $needsUpdate = $false
-                    $skipped++
-                }
-            }
-
-            if ($needsUpdate) {
-                Set-MgUserPhotoContent -UserId $upn -InFile $PhotoFilePath
-                Write-Host "✅ Applied photo: $upn"
-                $updated++
-            }
+            Set-MgUserPhotoContent -UserId $upn -InFile $PhotoFilePath
+            $entry.lastHash        = $refHash
+            $entry.lastSetUtc      = $nowUtc.ToString("o")
+            $entry.lastVerifiedUtc = $nowUtc.ToString("o")
+            Write-Host "✅ Applied photo: $upn"
+            $updated++
         } catch {
-            Write-Host "❌ Error on $upn: $($_.Exception.Message)"
+            Write-Host "❌ Error on $upn $($_.Exception.Message)"
             $errors++
         } finally {
-            if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
-            Start-Sleep -Milliseconds 150   # gentle pacing
+            Start-Sleep -Milliseconds 120  # gentle pacing
         }
+
+        # Save back entry
+        $snap[$upn] = $entry
     }
 
-    # Save snapshot to reflect current membership
+    # Remove snapshot entries for users no longer in the group (optional cleanup)
+    $currentSet = [System.Collections.Generic.HashSet[string]]::new([string[]]($members | ForEach-Object { $_.AdditionalProperties['userPrincipalName'] }))
+    foreach ($key in @($snap.Keys)) {
+        if (-not $currentSet.Contains($key)) { $snap.Remove($key) }
+    }
+
     try {
-        $currentUPNs | ConvertTo-Json | Set-Content -Path $SnapshotPath -Encoding UTF8
+        Save-Snapshot -map $snap
         Write-Host "💾 Snapshot updated: $SnapshotPath"
     } catch {
         Write-Host "⚠️ Failed to write snapshot: $($_.Exception.Message)"
