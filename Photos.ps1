@@ -8,33 +8,6 @@
 $OutDir = "C:\IntuneExports"
 $UseCatalogDefinitions = $true   # Include friendly names + Description for Settings Catalog
 
-# -------------------------------
-# Auto-install required modules
-# -------------------------------
-$modules = @(
-    "ImportExcel",
-    "Microsoft.Graph.Beta",
-    "Microsoft.Graph.Beta.DeviceManagement",
-    "Microsoft.Graph.Beta.Authentication"
-)
-
-function Ensure-Module($name) {
-    if (-not (Get-Module -ListAvailable -Name $name)) {
-        Write-Host "📦 Installing missing module: $name ..."
-        try {
-            Install-Module $name -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-            Write-Host "✅ Installed: $name"
-        } catch {
-            Write-Host "❌ Failed to install $name. $($_.Exception.Message)"
-            exit 1
-        }
-    } else {
-        Write-Host "✔ Module already installed: $name"
-    }
-    Import-Module $name -ErrorAction Stop
-}
-
-foreach ($m in $modules) { Ensure-Module $m }
 
 
 # ---------------- Modules ----------------
