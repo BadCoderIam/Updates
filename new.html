@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Onboarding Dashboard</title>
+</head>
+<body>
+    <h2>New Hire Onboarding</h2>
+    <button onclick="runOnboarding()">Run Photo Setup</button>
+
+    <script>
+    function runOnboarding() {
+        fetch("http://localhost:8080/run-onboarding")
+            .then(response => response.text())
+            .then(data => alert(data))
+            .catch(err => alert("Error: " + err));
+    }
+    </script>
+</body>
+</html>

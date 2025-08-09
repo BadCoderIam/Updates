@@ -1,0 +1,124 @@
+# Run-MITSPhotos.ps1
+# One-shot: prompts user, connects to Graph (USGov) interactively, runs photo job for NEW members, exits.
+
+# ------------- Config -------------
+# Load only what we need
+Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+Import-Module Microsoft.Graph.Groups -ErrorAction Stop
+Import-Module Microsoft.Graph.Users -ErrorAction Stop
+# Optional: if you call Get-MgOrganization in Ensure-Graph
+# Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction Stop
+
+
+
+$GroupName       = "DYN-ActiveUsers"
+$PhotoFilePath   = "C:\Scripts\android-chrome-512x512.png"
+$SnapshotPath    = "C:\Scripts\activeusers_snapshot.json"
+$GraphEnvironment = "USGov"
+
+# ------------- UI Prompt -------------
+# Requires -STA when launching PowerShell for reliable UI
+Add-Type -AssemblyName System.Windows.Forms
+$rc = [System.Windows.Forms.MessageBox]::Show(
+    "Run the New Hire Photo job now?`nYou'll be prompted to sign in to Microsoft Graph ($GraphEnvironment).",
+    "Onboarding",
+    [System.Windows.Forms.MessageBoxButtons]::OKCancel,
+    [System.Windows.Forms.MessageBoxIcon]::Information
+)
+if ($rc -ne [System.Windows.Forms.DialogResult]::OK) {
+    Write-Host "Cancelled by user."
+    exit 0
+}
+
+# ------------- Graph Helpers -------------
+function Ensure-Graph {
+    $scopes = @("User.ReadWrite.All","GroupMember.Read.All","Group.Read.All")
+
+    # Check current context
+    try { $ctx = Get-MgContext -ErrorAction Stop } catch { $ctx = $null }
+
+    $needConnect = $true
+    if ($ctx) {
+        $envOk = ($ctx.Environment -eq $GraphEnvironment)
+        # basic scope check
+        $scopeSet = @($ctx.Scopes | ForEach-Object { $_.ToLower() })
+        $scopesOk = ($scopes | ForEach-Object { $scopeSet -contains $_.ToLower() }) -notcontains $false
+        $needConnect = -not ($envOk -and $scopesOk)
+
+        if (-not $needConnect) {
+            try { Get-MgOrganization -ErrorAction Stop | Out-Null } catch { $needConnect = $true }
+        }
+    }
+
+    if ($needConnect) {
+        Connect-MgGraph -Environment $GraphEnvironment -Scopes $scopes -NoWelcome
+    }
+
+    # Log current context
+    try {
+        $ctx = Get-MgContext
+        Write-Host ("Graph context: Account={0} Tenant={1} Env={2}" -f $ctx.Account, $ctx.TenantId, $ctx.Environment)
+    } catch {
+        Write-Host "Failed to read Graph context: $($_.Exception.Message)"
+        throw
+    }
+}
+
+# ------------- Job Logic -------------
+function Run-SetPhotoForNewGroupMembers {
+    if (!(Test-Path $PhotoFilePath)) {
+        Write-Host "❌ Photo file not found: $PhotoFilePath"
+        return
+    }
+
+    Ensure-Graph
+
+    $group = Get-MgGroup -Filter "DisplayName eq '$GroupName'"
+    if (-not $group) {
+        Write-Host "❌ Group '$GroupName' not found."
+        return
+    }
+
+    # Load previous snapshot (if any)
+    $prevMembers = @()
+    if (Test-Path $SnapshotPath) {
+        try { $prevMembers = Get-Content $SnapshotPath | ConvertFrom-Json } catch { $prevMembers = @() }
+    }
+
+    # Current members (users only)
+    $currentMembers = Get-MgGroupMember -GroupId $group.Id -All | Where-Object {
+        $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
+    }
+
+    # Find new users by UPN
+    $newUsers = @()
+    foreach ($m in $currentMembers) {
+        $upn = $m.AdditionalProperties['userPrincipalName']
+        if ($prevMembers -notcontains $upn) { $newUsers += $upn }
+    }
+
+    if ($newUsers.Count -eq 0) {
+        Write-Host "⏱️ No new users found in '$GroupName'. Nothing to do."
+    } else {
+        foreach ($upn in $newUsers) {
+            try {
+                Set-MgUserPhotoContent -UserId $upn -InFile $PhotoFilePath
+                Write-Host "✅ Set photo for new user: $upn"
+            } catch {
+                Write-Host "❌ Failed to set photo for $upn $($_.Exception.Message)"
+            }
+        }
+    }
+
+    # Save current snapshot
+    $currentUPNs = $currentMembers | ForEach-Object { $_.AdditionalProperties['userPrincipalName'] }
+    try {
+        $currentUPNs | ConvertTo-Json | Set-Content -Path $SnapshotPath -Encoding UTF8
+        Write-Host "💾 Snapshot updated: $SnapshotPath"
+    } catch {
+        Write-Host "⚠️ Failed to write snapshot: $($_.Exception.Message)"
+    }
+}
+
+# ------------- Run -------------
+Run-SetPhotoForNewGroupMembers
