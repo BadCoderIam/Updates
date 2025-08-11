@@ -53,50 +53,57 @@ function Ensure-Graph {
 
 # -------- Snapshot helpers (map of UPN -> object) --------
 function Load-Snapshot {
-    if (Test-Path $SnapshotPath) {
-        try {
-            $raw = Get-Content $SnapshotPath -Raw
-            if (-not $raw) { return @{} }
-            $json = $raw | ConvertFrom-Json
-            # Support legacy array format (list of UPNs)
-            if ($json -is [System.Collections.IEnumerable] -and -not ($json.PSObject.Properties.Name -contains 'PSObject')) {
-                $map = @{}
-                foreach ($upn in $json) {
-                    $map[$upn] = [ordered]@{
-                        lastHash        = $null
-                        lastSetUtc      = $null
-                        lastVerifiedUtc = $null
-                    }
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path $Path)) { return @{} }
+
+    try {
+        $raw = Get-Content -Path $Path -Raw -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) { return @{} }
+
+        $json = $raw | ConvertFrom-Json
+
+        # Legacy: plain array of UPNs
+        if ($json -is [System.Array]) {
+            $map = @{}
+            foreach ($upn in $json) {
+                if ([string]::IsNullOrWhiteSpace($upn)) { continue }
+                $map[$upn] = [ordered]@{
+                    lastHash        = $null
+                    lastSetUtc      = $null
+                    lastVerifiedUtc = $null
                 }
-                return $map
             }
-            # If already an object/dictionary
-            if ($json -is [hashtable] -or $json.PSObject.Properties.Count -gt 0) {
-                # Convert PSCustomObject to hashtable
-                $map = @{}
-                foreach ($p in $json.PSObject.Properties) {
-                    $map[$p.Name] = $p.Value
-                }
-                return $map
-            }
-            return @{}
-        } catch {
-            Write-Host "⚠️ Failed to parse snapshot, starting fresh: $($_.Exception.Message)"
-            return @{}
+            return $map
         }
-    } else {
+
+        # Object/dictionary (PSCustomObject) → Hashtable
+        $map = @{}
+        foreach ($p in $json.PSObject.Properties) {
+            $map[$p.Name] = $p.Value
+        }
+        return $map
+    }
+    catch {
+        Write-Host "⚠️ Failed to parse snapshot '$Path'. Starting fresh: $($_.Exception.Message)"
         return @{}
     }
 }
 
-function Save-Snapshot($map) {
-    # Ensure it's serializable
+function Save-Snapshot {
+    param(
+        [Parameter(Mandatory)][hashtable]$Map,
+        [Parameter(Mandatory)][string]$Path
+    )
+
+    # Normalize to ordered object to keep stable key order on disk
     $obj = [ordered]@{}
-    foreach ($k in $map.Keys) {
-        $obj[$k] = $map[$k]
+    foreach ($k in $Map.Keys | Sort-Object) {
+        $obj[$k] = $Map[$k]
     }
-    $obj | ConvertTo-Json -Depth 6 | Set-Content -Path $SnapshotPath -Encoding UTF8
+    $obj | ConvertTo-Json -Depth 6 | Set-Content -Path $Path -Encoding UTF8
 }
+
 
 # -------- Job Logic (fast path, no downloads) --------
 function Run-SetPhotoForGroupMembers {
