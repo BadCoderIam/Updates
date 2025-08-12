@@ -1,190 +1,336 @@
-# PhotoWindow.ps1 – modular photo updater window (reuses existing auth)
+﻿<# PhotoWindow.ps1 — Push profile photo to group (USGov-friendly)
+    Primary: push chosen photo to ALL members of DYN-ActiveUsers
+    Optional: when "Verify" is checked, download & compare and only push when needed
+    Logs to status area, no popups. STA/WPF safe. PS5+.
 
-# --- Minimal modules (lightweight) ---
+    Requires:
+      Microsoft.Graph.Authentication
+      Microsoft.Graph.Users
+      Microsoft.Graph.Groups
+#>
+
+[CmdletBinding()]
+param(
+  [string]$Environment = 'USGov',
+  [string]$GroupName   = 'DYN-ActiveUsers',
+  [string]$ToolsRoot   = ''
+)
+
+# ---------- Resolve working folder (PS1 or packaged EXE) ----------
+function Get-ExecutableDirectory {
+  try {
+    $procPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    $exeName  = [System.IO.Path]::GetFileName($procPath).ToLowerInvariant()
+    if ($exeName -in @('powershell.exe','pwsh.exe','powershell_ise.exe')) {
+      if ($script:PSScriptRoot -and $script:PSScriptRoot.Trim()) { return $script:PSScriptRoot }
+      elseif ($PSCommandPath -and $PSCommandPath.Trim()) { return (Split-Path -Parent $PSCommandPath) }
+      else { return (Get-Location).Path }
+    } else { return (Split-Path -Parent $procPath) }
+  } catch { return (Get-Location).Path }
+}
+if ([string]::IsNullOrWhiteSpace($ToolsRoot)) { $ToolsRoot = Get-ExecutableDirectory }
+Set-Location -Path $ToolsRoot
+
+# ---------- Modules ----------
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Microsoft.Graph.Users          -ErrorAction Stop
 Import-Module Microsoft.Graph.Groups         -ErrorAction Stop
 
-
-function Show-PhotoWindow {
-  param([Parameter(Mandatory)][hashtable]$AppState)
-
-  # Config (change as needed, or add UI fields later)
-  $GroupName       = "DYN-ActiveUsers"
-  $PhotoFilePath   = "C:\Scripts\android-chrome-512x512.png"
-  $SnapshotPath    = "C:\Scripts\activeusers_snapshot.json"
-  $RecheckDays     = 30     # trust snapshot within this window; 0 = always trust when hash matches
-
-  # --- helpers (local) ---
-  function Load-Snapshot {
-    param([string]$Path)
-    if (-not (Test-Path $Path)) { return @{} }
-    try {
-      $raw = Get-Content -Path $Path -Raw
-      if ([string]::IsNullOrWhiteSpace($raw)) { return @{} }
-      $json = $raw | ConvertFrom-Json
-      if ($json -is [System.Array]) {
-        $m = @{}; foreach($upn in $json){ if ($upn){ $m[$upn] = [ordered]@{ lastHash=$null; lastSetUtc=$null; lastVerifiedUtc=$null } } }
-        return $m
-      }
-      $map = @{}; foreach($p in $json.PSObject.Properties){ $map[$p.Name] = $p.Value }; return $map
-    } catch { return @{} }
+# ---------- Auth ----------
+function Ensure-Graph {
+  try { $ctx = Get-MgContext -ErrorAction Stop } catch { $ctx = $null }
+  if (-not $ctx -or -not $ctx.Account) {
+    Connect-MgGraph -Environment $Environment -Scopes @('User.ReadWrite.All','Group.Read.All','GroupMember.Read.All') -NoWelcome | Out-Null
   }
-  function Save-Snapshot { param([hashtable]$Map,[string]$Path)
-    $obj = [ordered]@{}; foreach($k in $Map.Keys | Sort-Object){ $obj[$k] = $Map[$k] }
-    $obj | ConvertTo-Json -Depth 6 | Set-Content -Path $Path -Encoding UTF8
+}
+
+# ---------- Snapshot helpers (optional) ----------
+$SnapshotPath = Join-Path $ToolsRoot 'PhotoSnapshot.json'
+
+function Load-Snapshot {
+  if (Test-Path $SnapshotPath) {
+    try { return (Get-Content -Raw -Path $SnapshotPath | ConvertFrom-Json) } catch { return [pscustomobject]@{} }
   }
+  [pscustomobject]@{}
+}
 
-  # --- UI ---
-  Add-Type -AssemblyName System.Windows.Forms
-  Add-Type -AssemblyName System.Drawing
+function Save-Snapshot([object]$obj) {
+  $obj | ConvertTo-Json -Depth 6 | Set-Content -Path $SnapshotPath -Encoding UTF8
+}
 
-  $f = New-Object Windows.Forms.Form
-  $f.Text = "Update Photos – $GroupName"
-  $f.StartPosition = 'CenterParent'
-  $f.Width = 720; $f.Height = 460
-  $f.TopMost = $true
+# ---------- File helpers ----------
+function Get-MD5([string]$path){
+  try { return (Get-FileHash -Path $path -Algorithm MD5).Hash } catch { return $null }
+}
 
-  $lbl = New-Object Windows.Forms.Label
-  $lbl.Text = "Photo file: $PhotoFilePath"
-  $lbl.Left=15; $lbl.Top=15; $lbl.Width=650
-  $f.Controls.Add($lbl)
+function Download-UserPhoto([string]$upn,[string]$outPath){
+  try {
+    $bytes = Get-MgUserPhotoContent -UserId $upn -ErrorAction Stop
+    if ($bytes) {
+      [IO.File]::WriteAllBytes($outPath, $bytes)
+      return $true
+    }
+  } catch { }
+  return $false
+}
 
-  $bar = New-Object Windows.Forms.ProgressBar
-  $bar.Left=15; $bar.Top=45; $bar.Width=670; $bar.Height=18
-  $bar.Minimum=0; $bar.Maximum=100; $bar.Value=0
-  $f.Controls.Add($bar)
+# ---------- UI ----------
+Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase
 
-  $rtb = New-Object Windows.Forms.RichTextBox
-  $rtb.Left=15; $rtb.Top=75; $rtb.Width=670; $rtb.Height=300; $rtb.ReadOnly=$true
-  $f.Controls.Add($rtb)
+[xml]$xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Update User Photos" Height="640" Width="940"
+        WindowStartupLocation="CenterScreen" Background="#1E1E1E" FontFamily="Segoe UI">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Card" Color="#232323"/>
+    <SolidColorBrush x:Key="Border" Color="#33FFFFFF"/>
+    <SolidColorBrush x:Key="Fg" Color="#F2F2F2"/>
+    <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Fg}"/></Style>
+    <Style TargetType="GroupBox">
+      <Setter Property="Foreground" Value="{StaticResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+      <Setter Property="Margin" Value="10"/>
+    </Style>
+    <Style TargetType="TextBox">
+      <Setter Property="Foreground" Value="{StaticResource Fg}"/>
+      <Setter Property="Background" Value="{StaticResource Card}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource Fg}"/>
+      <Setter Property="Background" Value="{StaticResource Card}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Margin" Value="6"/>
+    </Style>
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{StaticResource Fg}"/>
+    </Style>
+  </Window.Resources>
 
-  $btnRun = New-Object Windows.Forms.Button
-  $btnRun.Text="Run"
-  $btnRun.Left=480; $btnRun.Top=385; $btnRun.Width=90
-  $f.Controls.Add($btnRun)
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="2*"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
 
-  $btnClose = New-Object Windows.Forms.Button
-  $btnClose.Text="Back"
-  $btnClose.Left=595; $btnClose.Top=385; $btnClose.Width=90
-  $f.Controls.Add($btnClose)
+    <!-- Options -->
+    <GroupBox Header="Options" Grid.Row="0" Grid.ColumnSpan="2">
+      <Grid Margin="8">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="100"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
 
-  $Cancel = $false
-  $btnClose.Add_Click({ $Cancel = $true; $f.Close() })
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Photo file:" Margin="0,6,8,0"/>
+        <TextBox   x:Name="TxtPhoto" Grid.Row="0" Grid.Column="1" Margin="0,4,8,0"/>
+        <Button    x:Name="BtnBrowse" Grid.Row="0" Grid.Column="2" Content="Browse…" Width="110"/>
 
-  function UI([int]$pct,[string]$msg){
-    if ($pct -lt 0){$pct=0} elseif ($pct -gt 100){$pct=100}
-    $bar.Value = $pct
-    if ($msg){ $rtb.AppendText(("{0} {1}`r`n" -f (Get-Date).ToString("HH:mm:ss"), $msg)) }
-    [System.Windows.Forms.Application]::DoEvents()
+        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,6,0,0">
+          <TextBlock Text="Group:" Margin="0,6,6,0"/>
+          <TextBox x:Name="TxtGroup" Width="220" Text="DYN-ActiveUsers" Margin="0,4,16,0"/>
+          <CheckBox x:Name="ChkVerify" Content="Verify current photos (download &amp; compare)" Margin="0,6,0,0"/>
+        </StackPanel>
+      </Grid>
+    </GroupBox>
+
+    <!-- Actions (left-side) -->
+    <GroupBox Header="Actions" Grid.Row="1" Grid.Column="0">
+      <StackPanel Margin="6">
+        <Button x:Name="BtnPush" Content="Push Profile Photo to Group" Height="40" />
+      </StackPanel>
+    </GroupBox>
+
+    <!-- Summary (right) -->
+    <GroupBox Header="Summary" Grid.Row="1" Grid.Column="1">
+      <Grid Margin="6">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="LblSnap" Grid.Row="0" Text="Snapshot: (none)"/>
+        <TextBlock x:Name="LblLastPush" Grid.Row="1" Text="Last push: (none)" Margin="0,4,0,0"/>
+        <TextBlock x:Name="LblGroupRes" Grid.Row="2" Text="" Margin="0,8,0,0"/>
+      </Grid>
+    </GroupBox>
+
+    <!-- Status -->
+    <Grid Grid.Row="2" Grid.ColumnSpan="2">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="120"/>
+      </Grid.RowDefinitions>
+      <ProgressBar x:Name="Pb" Grid.Row="0" Height="14" Minimum="0" Maximum="100"/>
+      <TextBox x:Name="LogBox" Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto"/>
+    </Grid>
+  </Grid>
+</Window>
+"@
+
+$sr = New-Object IO.StringReader($xaml.OuterXml)
+$xr = [Xml.XmlReader]::Create($sr)
+$win = [Windows.Markup.XamlReader]::Load($xr)
+
+# Controls
+$TxtPhoto  = $win.FindName('TxtPhoto')
+$BtnBrowse = $win.FindName('BtnBrowse')
+$TxtGroup  = $win.FindName('TxtGroup')
+$ChkVerify = $win.FindName('ChkVerify')
+$BtnPush   = $win.FindName('BtnPush')
+$LblSnap   = $win.FindName('LblSnap')
+$LblLast   = $win.FindName('LblLastPush')
+$LblGroupR = $win.FindName('LblGroupRes')
+$Pb        = $win.FindName('Pb')
+$LogBox    = $win.FindName('LogBox')
+
+# Window size (safe)
+$win.SizeToContent = 'Manual'
+$win.Width  = 940
+$win.Height = 640
+$win.WindowStartupLocation = 'CenterScreen'
+
+# REPLACE your current UI() with this:
+function UI([int]$pct,[string]$msg){
+  if ($pct -ge 0) {
+    $Pb.Value = [math]::Min(100,[math]::Max(0,$pct))
   }
+  if ($msg) {
+    $LogBox.AppendText(("{0} {1}`r`n" -f (Get-Date).ToString("HH:mm:ss"),$msg))
+    $LogBox.ScrollToEnd()
+  }
+  # WPF-friendly yield
+  $win.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::Background)
+}
 
-  $btnRun.Add_Click({
-    if (-not (Test-Path $PhotoFilePath)) {
-      [System.Windows.Forms.MessageBox]::Show("Photo file not found:`n$PhotoFilePath","File missing",0,16) | Out-Null
-      return
-    }
 
-    # Ensure Graph auth (works standalone or from main menu)
-    $ctx = $null
-    try { $ctx = Get-MgContext -ErrorAction Stop } catch {}
-    if (-not $ctx -or -not $ctx.Account) {
-      $f.TopMost = $false
-      $f.WindowState = 'Minimized'
-      [System.Windows.Forms.Application]::DoEvents()
-      try {
-        $scopes = @("User.ReadWrite.All","Group.Read.All","GroupMember.Read.All")
-        $env = if ($AppState.Environment) { $AppState.Environment } else { "USGov" }
-        Connect-MgGraph -Environment $env -Scopes $scopes -NoWelcome | Out-Null
-      } catch {
-        [System.Windows.Forms.MessageBox]::Show("Authentication cancelled or failed.`n$($_.Exception.Message)","Auth",0,48) | Out-Null
-        $f.WindowState = 'Normal'; $f.TopMost = $true
-        return
-      }
-      $f.WindowState = 'Normal'; $f.TopMost = $true
-    }
+# Initial values
+$TxtGroup.Text = $GroupName
+if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+  $defaultPic = Join-Path $env:USERPROFILE 'Pictures\android-chrome-512x512.png'
+  if (Test-Path $defaultPic) { $TxtPhoto.Text = $defaultPic }
+}
 
-    try {
-      $btnRun.Enabled = $false
-      UI 2 "Starting…"
-      $hash = (Get-FileHash -Path $PhotoFilePath -Algorithm MD5).Hash
-      $now  = [DateTime]::UtcNow
-      $snap = Load-Snapshot -Path $SnapshotPath
+# Load snapshot header
+$Snap = Load-Snapshot
+if ($Snap -and $Snap.lastPushUtc) { $LblLast.Text = "Last push: $($Snap.lastPushUtc)" }
+else { $LblLast.Text = "Last push: (none)" }
+if (Test-Path $SnapshotPath) { $LblSnap.Text = "Snapshot: $SnapshotPath" } else { $LblSnap.Text = "Snapshot: (none)" }
 
-      UI 6 "Locating group '$GroupName'…"
-      $g = Get-MgGroup -Filter "DisplayName eq '$GroupName'"
-      if (-not $g) { throw "Group not found: $GroupName" }
-
-      UI 10 "Enumerating members…"
-      $members = Get-MgGroupMember -GroupId $g.Id -All | Where-Object {
-        $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user'
-      }
-      $upns = @(); foreach($m in $members){ $upns += [string]$m.AdditionalProperties['userPrincipalName'] }
-      $upns = $upns | Where-Object { $_ } | Sort-Object -Unique
-
-      $total = [Math]::Max(1,$upns.Count)
-      $i=0; $applied=0; $skipped=0; $errors=0
-
-      foreach ($u in $upns) {
-        if ($Cancel) { throw "CancelledByUser" }
-        $i++; $pct = 10 + [int](($i/$total)*88)
-        UI $pct "User $i/$total $u"
-
-        if (-not $snap.ContainsKey($u)) {
-          $snap[$u] = [ordered]@{ lastHash=$null; lastSetUtc=$null; lastVerifiedUtc=$null }
-        }
-        $entry = $snap[$u]
-        $trust = $false
-        if ($entry.lastHash -eq $hash) {
-          if ($RecheckDays -eq 0) { $trust = $true }
-          elseif ($entry.lastVerifiedUtc) {
-            $trust = (([DateTime]::UtcNow - [datetime]$entry.lastVerifiedUtc).TotalDays -lt $RecheckDays)
-          }
-        }
-        if ($trust) { $rtb.AppendText("  ⏭️  Skipped (snapshot ok)`r`n"); $skipped++; continue }
-
-        try {
-          Set-MgUserPhotoContent -UserId $u -InFile $PhotoFilePath
-          $entry.lastHash=$hash; $entry.lastSetUtc=$now.ToString("o"); $entry.lastVerifiedUtc=$now.ToString("o")
-          $rtb.AppendText("  ✅ Applied`r`n"); $applied++
-        } catch {
-          $rtb.AppendText(("  ❌ Error: {0}`r`n" -f $_.Exception.Message)); $errors++
-        } finally {
-          Start-Sleep -Milliseconds 120
-        }
-        $snap[$u] = $entry
-      }
-
-      $cur = [System.Collections.Generic.HashSet[string]]::new([string[]]$upns)
-      foreach($k in @($snap.Keys)){ if (-not $cur.Contains($k)) { $snap.Remove($k) } }
-
-      UI 99 "Saving snapshot…"
-      Save-Snapshot -Map $snap -Path $SnapshotPath
-      UI 100 ("Done. Updated={0} Skipped={1} Errors={2}" -f $applied,$skipped,$errors)
-    }
-    catch {
-      if ($_.Exception.Message -eq "CancelledByUser") {
-        UI $bar.Value "Cancelled."
-      } else {
-        UI $bar.Value ("Stopped: {0}" -f $_.Exception.Message)
-      }
-    }
-    finally {
-      $btnRun.Enabled = $true
-    }
+# Browse photo
+$BtnBrowse.Add_Click({
+  $dlg = New-Object Microsoft.Win32.OpenFileDialog
+  $dlg.Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*"
+  if ($dlg.ShowDialog()) { $TxtPhoto.Text = $dlg.FileName }
 })
 
-# SHOW THE WINDOW (this must be inside the function)
-[void]$f.ShowDialog()
-}  # <--- end of function Show-PhotoWindow
+# -------- Core job --------
+$BtnPush.Add_Click({
+  $grpName = $TxtGroup.Text.Trim()
+  $verify  = $ChkVerify.IsChecked
+  $photo   = $TxtPhoto.Text.Trim()
 
-# -------- Auto-launch when invoked directly (must be OUTSIDE the function) --------
-if ($MyInvocation.InvocationName -ne '.') {
-  if ([Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
-    $args = @('-NoProfile','-ExecutionPolicy','Bypass','-STA','-File',"`"$PSCommandPath`"")
-    Start-Process powershell -ArgumentList $args | Out-Null
+  # If photo path is empty or missing, prompt to choose
+  if ([string]::IsNullOrWhiteSpace($photo) -or -not (Test-Path $photo)) {
+    UI 0 "No photo selected. Please choose an image…"
+    $dlg = New-Object Microsoft.Win32.OpenFileDialog
+    $dlg.Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*"
+    if ($dlg.ShowDialog()) {
+      $TxtPhoto.Text = $dlg.FileName
+      $photo = $TxtPhoto.Text.Trim()
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($photo) -or -not (Test-Path $photo)) {
+    UI 0 "Photo not found or not selected. Aborting."
     return
   }
-  $state = [ordered]@{ Environment = 'USGov'; IsAuthenticated = $false }
-  Show-PhotoWindow -AppState $state
-}
+
+  try {
+    UI 2 "Connecting to Graph ($Environment)…"
+    Ensure-Graph
+  } catch {
+    UI 0 ("Auth failed: {0}" -f $_.Exception.Message)
+    return
+  }
+
+  try {
+    UI 6 "Resolving group '$grpName'…"
+    $grp = Get-MgGroup -Filter "DisplayName eq '$grpName'"
+    if (-not $grp) { UI 0 "Group not found: $grpName"; return }
+
+    UI 10 "Enumerating members…"
+    $members = Get-MgGroupMember -GroupId $grp.Id -All | Where-Object { $_.AdditionalProperties['@odata.type'] -eq '#microsoft.graph.user' }
+  $upns = $members |
+  ForEach-Object { [string]$_.AdditionalProperties['userPrincipalName'] } |
+  Where-Object { $_ } |
+  Sort-Object -Unique
+    $total = [math]::Max(1,$upns.Count)
+    $LblGroupR.Text = "Members: $total"
+
+    $refHash = Get-MD5 $photo
+    $tmpRoot = Join-Path $env:TEMP ("PhotoVerify_{0}" -f ([Guid]::NewGuid().ToString('N')))
+    if ($verify) { New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null }
+
+    $i=0; $applied=0; $skipped=0; $same=0; $errors=0
+    foreach($u in $upns) {
+      $i++; $pct = 10 + [int](($i/$total)*88)
+      UI $pct "User $i/$total $u"
+
+      $pushNeeded = $true
+      if ($verify) {
+        $tmp = Join-Path $tmpRoot ($u -replace '[^\w\.-]','_') + '.img'
+        if (Download-UserPhoto -upn $u -outPath $tmp) {
+          $curHash = Get-MD5 $tmp
+          if ($curHash -and $curHash -eq $refHash) {
+            $same++; $pushNeeded = $false
+            UI -1 "  ⏭️  Same as reference (skip)"
+          }
+        }
+      }
+
+      if ($pushNeeded) {
+        try {
+          Set-MgUserPhotoContent -UserId $u -InFile $photo
+          UI -1 "  ✅ Applied"
+          $applied++
+        } catch {
+          UI -1 ("  ❌ Error: {0}" -f $_.Exception.Message)
+          $errors++
+        }
+      } else { $skipped++ }
+    }
+
+    if ($verify -and (Test-Path $tmpRoot)) {
+      Remove-Item -Path $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Update snapshot header (optional)
+    $Snap = [pscustomobject]@{
+      lastPushUtc = [DateTime]::UtcNow.ToString('u')
+      group       = $grpName
+      refHash     = $refHash
+      count       = $total
+    }
+    Save-Snapshot $Snap
+    $LblLast.Text = "Last push: $($Snap.lastPushUtc)"
+    $LblSnap.Text = "Snapshot: $SnapshotPath"
+
+    UI 100 ("Done. Applied={0} Skipped={1} Same={2} Errors={3}" -f $applied,$skipped,$same,$errors)
+  } catch {
+    UI $Pb.Value ("Stopped: {0}" -f $_.Exception.Message)
+  }
+})
+
+[void]$win.ShowDialog()

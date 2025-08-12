@@ -1,4 +1,4 @@
-﻿# --- Resolve ToolsRoot so it works from PS1 or packaged EXE (no IncludeFiles needed) ---
+# --- Resolve ToolsRoot so it works from PS1 or packaged EXE (no IncludeFiles needed) ---
 param(
   [string]$Environment = 'USGov',
   [string]$ToolsRoot   = 'C:\IntuneTools'
@@ -35,7 +35,6 @@ Set-Location -Path $ToolsRoot
 # Tool paths (loaded from the same folder as the PS1/EXE)
 $AccountCreatorPath = Join-Path $ToolsRoot 'AccountCreatorWPF.ps1'
 $PhotoToolPath      = Join-Path $ToolsRoot 'PhotoWindow.ps1'
-$YubiKeyWindowPath = Join-Path $ToolsRoot 'YubiKeyWindow.ps1'
 $AuditToolPath      = Join-Path $ToolsRoot 'Audit.ps1'
 $EnableScriptPath   = Join-Path $ToolsRoot 'EnablePendingUsers.ps1'
 
@@ -48,7 +47,10 @@ Add-Type -AssemblyName PresentationFramework
 # ----- Silent STA relaunch -----
 if ($MyInvocation.InvocationName -ne '.') {
   if ($psise -ne $null -or [Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
-    Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -STA -File ' + '"' + $PSCommandPath + '"' + ' -Environment ' + $Environment + ' -ToolsRoot ' + $ToolsRoot) | Out-Null
+    Start-Process powershell -WindowStyle Hidden -ArgumentList @(
+      '-NoProfile','-ExecutionPolicy','Bypass','-STA','-File',"`"$PSCommandPath`"",
+      '-Environment', $Environment, '-ToolsRoot', $ToolsRoot
+    ) | Out-Null
     return
   }
 }
@@ -180,7 +182,6 @@ $xaml = @'
               <Button x:Name="BtnAudit"          Content="Audit"           Width="200" IsEnabled="False"/>
               <Button x:Name="BtnOutlook"        Content="Outlook"         Width="200" IsEnabled="False"/>
               <Button x:Name="BtnLicense"        Content="License check"   Width="200" IsEnabled="False"/>
-                          <Button x:Name="BtnYubiKey"      Content="YubiKey Console" Width="200" IsEnabled="False"/>
             </UniformGrid>
           </GroupBox>
 
@@ -259,8 +260,7 @@ function New-XamlWindow([string]$x){
   } catch {
     $dump = Join-Path $env:TEMP 'MainMenu_xaml_error.xaml'
     $x | Set-Content $dump -Encoding UTF8
-    throw "XAML parse error: $($_.Exception.Message)
-Dumped to: $dump"
+    throw "XAML parse error: $($_.Exception.Message)`nDumped to: $dump"
   }
 }
 
@@ -284,8 +284,6 @@ $BtnUpdatePhotos.IsEnabled = $true  # force enable for testing
 $BtnAudit          = $win.FindName('BtnAudit')
 $BtnOutlook        = $win.FindName('BtnOutlook')
 $BtnLicense        = $win.FindName('BtnLicense')
-$BtnYubiKey        = $win.FindName('BtnYubiKey')
-$BtnYubiKey.IsEnabled = $true  # enabled for testing
 
 $BtnRepair         = $win.FindName('BtnRepair')
 $BtnInstallSelected= $win.FindName('BtnInstallSelected')
@@ -299,8 +297,7 @@ $SetupMsg = $win.FindName('SetupMsg')
 
 # ----- Helpers -----
 function Ensure-Dir($p){ if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p -Force | Out-Null } }
-function Log([string]$m){ $LogBox.AppendText(("{0} {1}`r
-" -f (Get-Date).ToString("HH:mm:ss"), $m)); $LogBox.ScrollToEnd() }
+function Log([string]$m){ $LogBox.AppendText(("{0} {1}`r`n" -f (Get-Date).ToString("HH:mm:ss"), $m)); $LogBox.ScrollToEnd() }
 function SetStatus([string]$s){ $LblStatus.Text = "Status: $s" }
 function UI-Setup([int]$pct,[string]$msg){ if($pct -lt 0){$pct=0}elseif($pct -gt 100){$pct=100}; $SetupBar.Value=$pct; $SetupMsg.Text=$msg }
 
@@ -476,7 +473,6 @@ function Set-ButtonsEnabled([bool]$enabled){
   $BtnAudit.IsEnabled          = $enabled
   $BtnOutlook.IsEnabled        = $enabled
   $BtnLicense.IsEnabled        = $enabled
-  if ($BtnYubiKey) { $BtnYubiKey.IsEnabled = $true }
   $BtnSignOut.IsEnabled        = $enabled
 }
 function Refresh-AuthState {
@@ -499,7 +495,6 @@ function Refresh-AuthState {
   }
 }
 
-# ----- Tool launch helper -----
 # ----- Tool launch helper -----
 function Launch-Tool([string]$toolPath, [object]$extraArgs) {
   if (-not (Test-Path $toolPath)) { UI 0 "Tool not found: $toolPath"; return }
@@ -531,71 +526,13 @@ function Launch-Tool([string]$toolPath, [object]$extraArgs) {
 
   try {
     Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $argString | Out-Null
-  }
-  catch {
-    UI 0 "Failed to start: $toolPath
-Args: $argString
-$($_.Exception.Message)"
+  } catch {
+    UI 0 "Failed to start: $toolPath`nArgs: $argString`n$($_.Exception.Message)"
   }
 }
-
-# --- Dedicated launchers ---
-function Open-AccountCreator {
-  param()
-  Launch-Tool $AccountCreatorPath "-Environment $Environment"
-}
-function Open-PhotoWindow {
-  param()
-  Launch-Tool $PhotoToolPath @()
-}
-function Open-Audit {
-  param()
-  Launch-Tool $AuditToolPath "-Environment $Environment"
-}
-function Open-EnablePendingUsers {
-  param()
-  if (Test-Path $EnableScriptPath) {
-    Launch-Tool $EnableScriptPath "-Environment $Environment"
-  } else {
-    UI 0 "EnablePendingUsers.ps1 not found in $ToolsRoot"
-  }
-}
-# Normalize extraArgs to an array of strings
-  $argsList = @()
-  if ($null -ne $extraArgs) {
-    if ($extraArgs -is [System.Array]) {
-      $argsList = @($extraArgs)
-    } else {
-      $argsList = @("$extraArgs")
-    }
-  }
-
-  # Base args
-  $psArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File', $toolPath)
-
-  # Filter out null/empty
-  $psArgs = $psArgs + ($argsList | Where-Object { $_ -ne $null -and "$_" -ne '' })
-
-  # Quote each arg that has spaces; escape embedded quotes
-  $quoted = foreach ($a in $psArgs) {
-    $s = "$a".Replace('"','`"')
-    if ($s -match '\s') { '"{0}"' -f $s } else { $s }
-  }
-
-  # Windows PowerShell Start-Process wants a single string for -ArgumentList
-  $argString = ($quoted -join ' ')
-
-  try {
-    Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList $argString | Out-Null
-  }
-
-   catch {
-    UI 0 "Failed to start: $toolPath
-Args: $argString
-$($_.Exception.Message)"
-  }
-
-
+  Start-Process powershell -WindowStyle Hidden -ArgumentList @(
+    '-NoProfile','-ExecutionPolicy','Bypass','-STA','-File',"`"$path`"",$args
+  ) | Out-Null
 
 # ----- Wire buttons -----
 $BtnClose.Add_Click({ $win.Close() })
@@ -617,12 +554,11 @@ $BtnAuth.Add_Click({
   }
   Refresh-AuthState
 })
-$BtnSignOut.Add_Click({ try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {t}; Refresh-AuthState })
+$BtnSignOut.Add_Click({ try { Disconnect-MgGraph -ErrorAction SilentlyContinue } catch {}; Refresh-AuthState })
 
-$BtnAccountCreator.Add_Click({ Open-AccountCreator })
-$BtnYubiKey.Add_Click({ Launch-Tool $YubiKeyWindowPath @() })
-$BtnUpdatePhotos.Add_Click({ Open-PhotoWindow })
-$BtnAudit.Add_Click({ Open-Audit })
+$BtnAccountCreator.Add_Click({ Launch-Tool $AccountCreatorPath "-Environment $Environment" })
+$BtnUpdatePhotos.Add_Click({ Launch-Tool $PhotoToolPath @() })
+$BtnAudit.Add_Click({ Launch-Tool $AuditToolPath "-Environment $Environment" })
 $BtnOutlook.Add_Click({ [System.Windows.MessageBox]::Show('Outlook tool not wired yet.') })
 $BtnLicense.Add_Click({ [System.Windows.MessageBox]::Show('License check not wired yet.') })
 
