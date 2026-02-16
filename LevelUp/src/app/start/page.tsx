@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import MerchModal from "@/components/MerchModal";
 
 
 function trackEnterApp(source: string) {
@@ -37,6 +38,7 @@ function scrollToId(id: string) {
 
 export default function Home() {
   const raf = useRef<number | null>(null);
+  const [merchOpen, setMerchOpen] = useState(false);
   const [planModal, setPlanModal] = useState<null | { plan: string; price: string }>(null);
 
   useEffect(() => {
@@ -63,6 +65,34 @@ export default function Home() {
     };
   }, []);
 
+  // Soft reveal: fade/slide sections into view as you scroll.
+  useEffect(() => {
+    const scope = document.querySelector("main.landing") ?? document;
+    const nodes = Array.from(scope.querySelectorAll<HTMLElement>("[data-reveal]"));
+    if (!nodes.length) return;
+
+    nodes.forEach((el) => {
+      const d = el.getAttribute("data-delay");
+      if (d) el.style.setProperty("--revealDelay", `${Number(d)}ms`);
+      el.classList.add("reveal");
+    });
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            (e.target as HTMLElement).classList.add("isVisible");
+            io.unobserve(e.target);
+          }
+        }
+      },
+      { threshold: 0.14, rootMargin: "0px 0px -10% 0px" }
+    );
+
+    nodes.forEach((n) => io.observe(n));
+    return () => io.disconnect();
+  }, []);
+
   return (
     <main className="landing">
       <header className="navTop">
@@ -79,6 +109,7 @@ export default function Home() {
           <a href="#features" onClick={(e) => (e.preventDefault(), scrollToId("features"))}>Features</a>
           <a href="#pricing" onClick={(e) => (e.preventDefault(), scrollToId("pricing"))}>Pricing</a>
           <a href="#resources" onClick={(e) => (e.preventDefault(), scrollToId("resources"))}>Resources</a>
+          <a href="#merch" onClick={(e) => (e.preventDefault(), setMerchOpen(true))}>Merch</a>
         </nav>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -120,8 +151,8 @@ export default function Home() {
         <div className="heroShade" />
 
         <div className="heroContent">
-          <div>
-            <h1 className="heroH1">Level up your IT career — like a game.</h1>
+          <div data-reveal data-delay="0">
+            <h1 className="heroH1">Level up your IT career!</h1>
             <p className="heroP">
               Earn XP by practicing real-world questions, unlock interview simulations, and master certifications.
               Built for IT Support first, then Desktop and Cloud.
@@ -137,7 +168,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="heroCard">
+          <div className="heroCard revealFast" data-reveal data-delay="140">
             <div className="kpiMini">
               <div><b>XP</b> <span className="muted">• 350 / 500</span></div>
               <div className="muted">Helpdesk L1</div>
@@ -170,26 +201,26 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="how" className="section">
+      <section id="how" className="section" data-reveal data-delay="0">
         <h2 className="sectionTitle">How it works</h2>
         <p className="sectionSub">
           A modern training loop: pick a path, earn XP through practice, then unlock realistic interview milestones.
         </p>
 
         <div className="grid3">
-          <div className="featureCard">
+          <div className="featureCard" data-reveal data-delay="0">
             <b>1) Choose your path</b>
             <p className="muted" style={{ margin: "8px 0 0 0" }}>
               Helpdesk Support → Desktop Technician → Cloud Engineer. Your plan adapts as you improve.
             </p>
           </div>
-          <div className="featureCard">
+          <div className="featureCard" data-reveal data-delay="90">
             <b>2) Earn XP by practicing</b>
             <p className="muted" style={{ margin: "8px 0 0 0" }}>
               Answer questions, learn concepts, and build confidence with structured feedback.
             </p>
           </div>
-          <div className="featureCard">
+          <div className="featureCard" data-reveal data-delay="180">
             <b>3) Unlock interviews + offers</b>
             <p className="muted" style={{ margin: "8px 0 0 0" }}>
               Pass HR → pass Tech → receive a mock offer letter + a professional badge.
@@ -198,28 +229,28 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="features" className="section">
+      <section id="features" className="section" data-reveal data-delay="0">
         <h2 className="sectionTitle">What you get</h2>
         <p className="sectionSub">
           Built to feel like a 2026 product: clean, fast, and motivating — with subtle gamification that keeps you moving.
         </p>
 
         <div className="grid3">
-          <div className="featureCard"><b>Interview simulations</b><p className="muted" style={{ marginTop: 8 }}>HR screen → Tech panel flow with unlocks.</p></div>
-          <div className="featureCard"><b>Certification prep</b><p className="muted" style={{ marginTop: 8 }}>Practice tests for A+, Security+, and AZ-900.</p></div>
-          <div className="featureCard"><b>Career outlook</b><p className="muted" style={{ marginTop: 8 }}>See next roles, salary ranges, and recommended certs.</p></div>
-          <div className="featureCard"><b>XP + levels</b><p className="muted" style={{ marginTop: 8 }}>Progress you can feel: XP bars, ranks, and badges.</p></div>
-          <div className="featureCard"><b>Personalized path</b><p className="muted" style={{ marginTop: 8 }}>Start where you are, and grow into Desktop and Cloud.</p></div>
-          <div className="featureCard"><b>Offer PDFs</b><p className="muted" style={{ marginTop: 8 }}>Generate downloadable mock offer letters (Premium).</p></div>
+          <div className="featureCard" data-reveal data-delay="0"><b>Interview simulations</b><p className="muted" style={{ marginTop: 8 }}>HR screen → Tech panel flow with unlocks.</p></div>
+          <div className="featureCard" data-reveal data-delay="90"><b>Certification prep</b><p className="muted" style={{ marginTop: 8 }}>Practice tests for A+, Security+, and AZ-900.</p></div>
+          <div className="featureCard" data-reveal data-delay="180"><b>Career outlook</b><p className="muted" style={{ marginTop: 8 }}>See next roles, salary ranges, and recommended certs.</p></div>
+          <div className="featureCard" data-reveal data-delay="270"><b>XP + levels</b><p className="muted" style={{ marginTop: 8 }}>Progress you can feel: XP bars, ranks, and badges.</p></div>
+          <div className="featureCard" data-reveal data-delay="360"><b>Personalized path</b><p className="muted" style={{ marginTop: 8 }}>Start where you are, and grow into Desktop and Cloud.</p></div>
+          <div className="featureCard" data-reveal data-delay="450"><b>Offer PDFs</b><p className="muted" style={{ marginTop: 8 }}>Generate downloadable mock offer letters (Premium).</p></div>
         </div>
       </section>
 
-      <section id="pricing" className="section">
+      <section id="pricing" className="section" data-reveal data-delay="0">
         <h2 className="sectionTitle">Pricing</h2>
         <p className="sectionSub">Start free, upgrade when you’re ready. Cancel anytime.</p>
 
         <div className="priceGrid">
-          <div className="priceCard">
+          <div className="priceCard" data-reveal data-delay="0">
             <b>Free</b>
             <div className="priceTag">$0</div>
             <div className="muted">For getting started</div>
@@ -232,7 +263,7 @@ export default function Home() {
             <button className="primary" style={{ width: "100%" }} onClick={() => goEnterApp("nav")}>Start free</button>
           </div>
 
-          <div className="priceCard priceCardPro">
+          <div className="priceCard priceCardPro" data-reveal data-delay="120">
             <b>Pro</b>
             <div className="priceTag">$5.99<span className="muted" style={{ fontSize: 14 }}>/mo</span></div>
             <div className="muted">Best value</div>
@@ -245,7 +276,7 @@ export default function Home() {
             <button className="gold" style={{ width: "100%" }} onClick={() => setPlanModal({ plan: "Pro", price: "$5.99/mo" })}>Go Pro</button>
           </div>
 
-          <div className="priceCard">
+          <div className="priceCard" data-reveal data-delay="240">
             <b>Premium</b>
             <div className="priceTag">$19.99<span className="muted" style={{ fontSize: 14 }}>/mo</span></div>
             <div className="muted">For serious accelerators</div>
@@ -263,17 +294,55 @@ export default function Home() {
           Note: payment integration is planned (Stripe). For now, the buttons are placeholders.
         </p>
       </section>
+      <section id="merch" className="section" data-reveal data-delay="0">
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h2 className="sectionTitle">Merch</h2>
+            <p className="sectionSub">LevelUp Pro gear — auto-scrolls, pause on hover.</p>
+          </div>
+          <button className="secondaryBtn" onClick={() => setMerchOpen(true)}>View all merch</button>
+        </div>
 
-      <section id="resources" className="section">
+        <div className="merchMarquee" aria-label="Merch carousel" data-reveal data-delay="120">
+          <div className="merchTrack">
+            {[
+              { src: "/merch/01-pens.png", title: "Pens", price: "$9" },
+              { src: "/merch/02-mousepad.png", title: "Mousepad", price: "$14" },
+              { src: "/merch/03-usb-keys.png", title: "USB Keys", price: "$19" },
+              { src: "/merch/04-mug.png", title: "Mug", price: "$12" },
+              { src: "/merch/05-usb-single.png", title: "USB (single)", price: "$12" },
+              { src: "/merch/06-hoodie.png", title: "Hoodie", price: "$39" },
+              // duplicate for seamless loop
+              { src: "/merch/01-pens.png", title: "Pens", price: "$9" },
+              { src: "/merch/02-mousepad.png", title: "Mousepad", price: "$14" },
+              { src: "/merch/03-usb-keys.png", title: "USB Keys", price: "$19" },
+              { src: "/merch/04-mug.png", title: "Mug", price: "$12" },
+              { src: "/merch/05-usb-single.png", title: "USB (single)", price: "$12" },
+              { src: "/merch/06-hoodie.png", title: "Hoodie", price: "$39" },
+            ].map((it, idx) => (
+              <button key={idx} className="merchItemCard" type="button" onClick={() => setMerchOpen(true)}>
+                <img src={it.src} alt={it.title} />
+                <div className="meta">
+                  <b>{it.title}</b>
+                  <small>{it.price}</small>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+      <section id="resources" className="section" data-reveal data-delay="0">
         <h2 className="sectionTitle">Resources</h2>
         <p className="sectionSub">
           Guides and study plans that help you move faster. (We’ll expand this section as you add content.)
         </p>
 
         <div className="grid3">
-          <div className="featureCard"><b>IT Support roadmap</b><p className="muted" style={{ marginTop: 8 }}>What to learn first, what to skip, and how to practice.</p></div>
-          <div className="featureCard"><b>Certification study plans</b><p className="muted" style={{ marginTop: 8 }}>A+, Security+, AZ-900 — weekly milestone plans.</p></div>
-          <div className="featureCard"><b>Salary + roles guide</b><p className="muted" style={{ marginTop: 8 }}>How skills map to roles and pay bands.</p></div>
+          <div className="featureCard" data-reveal data-delay="0"><b>IT Support roadmap</b><p className="muted" style={{ marginTop: 8 }}>What to learn first, what to skip, and how to practice.</p></div>
+          <div className="featureCard" data-reveal data-delay="120"><b>Certification study plans</b><p className="muted" style={{ marginTop: 8 }}>A+, Security+, AZ-900 — weekly milestone plans.</p></div>
+          <div className="featureCard" data-reveal data-delay="240"><b>Salary + roles guide</b><p className="muted" style={{ marginTop: 8 }}>How skills map to roles and pay bands.</p></div>
         </div>
 
         <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -293,6 +362,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
-    </main>
+      <MerchModal open={merchOpen} onClose={() => setMerchOpen(false)} />
+</main>
   );
 }

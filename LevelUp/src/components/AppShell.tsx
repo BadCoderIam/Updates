@@ -1,6 +1,7 @@
 "use client";
 
 import ThemeToggle from "@/components/ThemeToggle";
+import AmbientFX from "@/components/AmbientFX";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function AppShell({
@@ -18,6 +19,7 @@ export default function AppShell({
 }) {
   return (
     <main>
+      <AmbientFX />
       <div className="bgPattern" />
       <div className="heroBlur" />
 

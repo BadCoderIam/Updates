@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ProgressBar from "@/components/ProgressBar";
+import MerchModal from "@/components/MerchModal";
 
 type Eligibility = {
   eligible: boolean;
@@ -53,6 +54,7 @@ export default function Dashboard() {
   const [elig, setElig] = useState<Eligibility | null>(null);
   const [user, setUser] = useState<{ startingPosition: string | null } | null>(null);
   const [showPositionModal, setShowPositionModal] = useState(false);
+  const [merchOpen, setMerchOpen] = useState(false);
   const [showLaunchModal, setShowLaunchModal] = useState(false);
   const [positionChangeMode, setPositionChangeMode] = useState(false);
   const [pendingPos, setPendingPos] = useState<string | null>(null);
@@ -150,6 +152,32 @@ export default function Dashboard() {
   return (
 
     <>
+
+      <header className="navTop" style={{ position: "sticky", top: 0, zIndex: 30, marginBottom: 18 }}>
+        <div className="brandLock">
+          <div className="brandMark">L</div>
+          <div className="brandText">
+          </div>
+        </div>
+
+        <nav className="navLinks">
+          <a href="/dashboard">Dashboard</a>
+          <a href="/position-training">Training</a>
+          <a href="/cert-mcq">Certifications</a>
+          <a href="#" onClick={(e) => (e.preventDefault(), setMerchOpen(true))}>Merch</a>
+          <a href="/admin">Admin</a>
+        </nav>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button className="secondaryBtn" type="button" onClick={() => (window.location.href = "/start#pricing")}>Pricing</button>
+          <button className="primaryBtn" type="button" onClick={() => setShowLaunchModal(true)}>Start Now →</button>
+          <div className="userPill">
+            <span className="userDot" />
+            <span>{userId}</span>
+          </div>
+        </div>
+      </header>
+
       {showLaunchModal && (
         <div className="luModalOverlay">
           <div className="luModal" role="dialog" aria-modal="true" aria-label="Choose what to start">
@@ -163,13 +191,13 @@ export default function Dashboard() {
 
             <div className="luModalBody">
               <div className="luGrid3">
-                <button className="luRoleCard" type="button" onClick={() => (window.location.href="/practice")}>
+                <button className="luRoleCard" type="button" onClick={() => (window.location.href="/position-training")}>
                   <div className="luRoleIcon" aria-hidden="true">🎯</div>
                   <div className="luRoleTitle">Position training</div>
                   <div className="luRoleDesc">Practice role-based questions and earn XP.</div>
                 </button>
 
-                <button className="luRoleCard" type="button" onClick={() => (window.location.href="/certifications")}>
+                <button className="luRoleCard" type="button" onClick={() => (window.location.href="/cert-mcq")}>
                   <div className="luRoleIcon" aria-hidden="true">📚</div>
                   <div className="luRoleTitle">Certifications</div>
                   <div className="luRoleDesc">A+, Security+, AZ-900 practice modules.</div>
@@ -378,6 +406,7 @@ export default function Dashboard() {
             </div>
     </div>
     </main>
-    </>
+      <MerchModal open={merchOpen} onClose={() => setMerchOpen(false)} />
+</>
   );
 }

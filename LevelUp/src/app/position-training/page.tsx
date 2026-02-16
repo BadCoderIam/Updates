@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Q = {
@@ -13,16 +13,19 @@ type Q = {
 
 const FALLBACK: Q[] = [
   {
-    prompt: "A user cannot access any websites but can ping 8.8.8.8 successfully. What is the MOST likely issue?",
-    choices: ["Default gateway", "DNS server", "Duplex mismatch", "IP conflict"],
-    correctIndex: 1,
-    explanation: "If IP connectivity works (ping 8.8.8.8) but names fail, DNS is the likely culprit.",
+    prompt: "No training set assigned yet. Assign a set to TRAINING for your starting position in Admin.",
+    choices: ["Open Admin", "" , "", ""],
+    correctIndex: 0,
+    explanation: "In Admin → select a set → Assign → Use for Training.",
   },
 ];
 
-export default function TestNowPage() {
+export default function PositionTrainingPage() {
+  const userId = "demo-user"; // TODO: replace with real auth later
+  const [startingPosition, setStartingPosition] = useState<string | null>(null);
+
   const [questions, setQuestions] = useState<Q[]>([]);
-  const [setLabel, setSetLabel] = useState<string>("Test Now");
+  const [setLabel, setSetLabel] = useState<string>("Position Training");
   const [loading, setLoading] = useState(true);
 
   const [idx, setIdx] = useState(0);
@@ -30,14 +33,20 @@ export default function TestNowPage() {
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
-  const [secondsLeft, setSecondsLeft] = useState(15 * 60);
-  const [done, setDone] = useState(false);
-
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/content/active?lane=TEST_NOW", { cache: "no-store" as any });
+        const sRes = await fetch(`/api/users/summary?userId=${encodeURIComponent(userId)}`, { cache: "no-store" as any });
+        const sJson = await sRes.json();
+        const sp = sJson?.user?.startingPosition || null;
+        if (mounted) setStartingPosition(sp);
+
+        const url = sp
+          ? `/api/content/active?lane=TRAINING&startingPosition=${encodeURIComponent(sp)}`
+          : `/api/content/active?lane=TRAINING&startingPosition=HELPDESK_SUPPORT`;
+
+        const res = await fetch(url, { cache: "no-store" as any });
         const json = await res.json();
         const qs = (json?.questions || []).map((q: any) => ({
           id: q.id,
@@ -50,42 +59,23 @@ export default function TestNowPage() {
         if (mounted) {
           if (qs.length) {
             setQuestions(qs);
-            setSetLabel(json?.set?.name ? `Test Now · ${json.set.name}` : "Test Now");
+            const human = sp ? sp.replaceAll("_", " ") : "your path";
+            setSetLabel(json?.set?.name ? `Training · ${human} · ${json.set.name}` : `Training · ${human}`);
           } else {
             setQuestions(FALLBACK);
-            setSetLabel("Test Now · Sample");
           }
         }
       } catch {
-        if (mounted) {
-          setQuestions(FALLBACK);
-          setSetLabel("Test Now · Sample");
-        }
+        if (mounted) setQuestions(FALLBACK);
       } finally {
         if (mounted) setLoading(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
-
-  useEffect(() => {
-    if (done) return;
-    const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [done]);
-
-  useEffect(() => {
-    if (secondsLeft === 0 && !done) setDone(true);
-  }, [secondsLeft, done]);
 
   const q = questions[idx];
   const total = questions.length;
-
-  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
-  const ss = String(secondsLeft % 60).padStart(2, "0");
-
   const canSubmit = selected !== null && !submitted;
   const isCorrect = submitted && selected === q?.correctIndex;
 
@@ -102,24 +92,17 @@ export default function TestNowPage() {
   }
 
   function next() {
-    if (idx + 1 >= total) {
-      setDone(true);
-      return;
-    }
+    if (idx + 1 >= total) return;
     resetForNext(idx + 1);
   }
-
-  const progress = total ? Math.round(((idx + (done ? 1 : 0)) / total) * 100) : 0;
 
   if (loading) {
     return (
       <div className="page">
         <div className="container" style={{ maxWidth: 980 }}>
           <div className="card" style={{ padding: 18 }}>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>Loading Test…</div>
-            <div className="muted" style={{ marginTop: 8 }}>
-              Pulling the active set from your admin placement.
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 18 }}>Loading Training…</div>
+            <div className="muted" style={{ marginTop: 8 }}>Pulling your assigned training set.</div>
           </div>
         </div>
       </div>
@@ -133,7 +116,7 @@ export default function TestNowPage() {
           <div className="card" style={{ padding: 18 }}>
             <div style={{ fontWeight: 800, fontSize: 18 }}>No questions available</div>
             <div className="muted" style={{ marginTop: 8 }}>
-              Assign a set to <b>TEST_NOW</b> in the Admin portal, or upload questions to a set first.
+              Assign a set to <b>TRAINING</b> for your starting position in the Admin portal.
             </div>
             <div style={{ marginTop: 14 }}>
               <Link className="btn" href="/admin">Open Admin</Link>
@@ -150,18 +133,17 @@ export default function TestNowPage() {
         <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 12 }}>
           <div>
             <div className="muted" style={{ fontWeight: 700, letterSpacing: 0.2 }}>{setLabel}</div>
-            <div style={{ fontSize: 26, fontWeight: 900, marginTop: 4 }}>Timed Quiz</div>
+            <div style={{ fontSize: 26, fontWeight: 900, marginTop: 4 }}>Practice</div>
           </div>
           <div className="row" style={{ gap: 10, alignItems: "center" }}>
-            <div className="pill">Time: {mm}:{ss}</div>
             <div className="pill">Score: {score}/{total}</div>
+            <div className="pill">Path: {startingPosition ? startingPosition.replaceAll("_", " ") : "Not set"}</div>
           </div>
         </div>
 
         <div className="card" style={{ padding: 16 }}>
           <div className="row" style={{ justifyContent: "space-between", gap: 10 }}>
             <div style={{ fontWeight: 800 }}>Question {idx + 1} of {total}</div>
-            <div className="muted">Progress: {progress}%</div>
           </div>
 
           <div style={{ height: 10 }} />
@@ -242,26 +224,12 @@ export default function TestNowPage() {
               <button className="btn" disabled={!canSubmit} onClick={submit} style={{ opacity: canSubmit ? 1 : 0.45 }}>
                 Submit
               </button>
-              <button className="btn" disabled={!submitted} onClick={next} style={{ opacity: submitted ? 1 : 0.45 }}>
-                {idx + 1 >= total ? "Finish" : "Next"}
+              <button className="btn" disabled={!submitted || idx + 1 >= total} onClick={next} style={{ opacity: submitted && idx + 1 < total ? 1 : 0.45 }}>
+                Next
               </button>
             </div>
           </div>
         </div>
-
-        {done ? (
-          <div className="card" style={{ padding: 16, marginTop: 14 }}>
-            <div style={{ fontWeight: 900, fontSize: 18 }}>Test complete</div>
-            <div className="muted" style={{ marginTop: 6 }}>
-              Score: <b>{score}</b> / {total}
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <button className="btn" onClick={() => { setIdx(0); setSelected(null); setSubmitted(false); setScore(0); setSecondsLeft(15*60); setDone(false); }}>
-                Retake
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
     </div>
   );

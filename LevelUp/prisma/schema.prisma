@@ -81,6 +81,7 @@ model PracticeAnswer {
   xpAwarded    Int
   breakdownJson Json
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
   @@index([userId, createdAt])
@@ -197,4 +198,73 @@ model MarketingEvent {
   createdAt DateTime @default(now())
 
   @@index([event, createdAt])
+}
+
+
+enum QuestionDomain {
+  NETWORKING
+}
+
+enum QuestionSetStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+
+enum ContentLane {
+  TEST_NOW
+  TRAINING
+  CERTIFICATIONS
+}
+
+model QuestionSetPlacement {
+  id              String           @id @default(cuid())
+  setId           String
+  lane            ContentLane
+  startingPosition StartingPosition?
+  certExam        CertExam?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  set QuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([lane, isActive, createdAt])
+  @@index([lane, startingPosition])
+  @@index([lane, certExam])
+}
+
+model QuestionSet {
+  id        String            @id @default(cuid())
+  domain    QuestionDomain
+  name      String
+  status    QuestionSetStatus @default(DRAFT)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  placements QuestionSetPlacement[]
+
+  questions MCQQuestion[]
+
+  @@index([domain, status, createdAt])
+}
+
+model MCQQuestion {
+  id           String   @id @default(cuid())
+  setId        String
+  prompt       String
+  choices      Json
+  correctIndex Int
+  sortOrder    Int      @default(0)
+  explanation  String?
+  difficulty   Int      @default(1)
+  tags         String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  set QuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([setId, sortOrder])
+  @@index([setId, createdAt])
 }
