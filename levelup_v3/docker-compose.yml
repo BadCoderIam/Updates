@@ -1,0 +1,27 @@
+services:
+  db:
+    image: postgres:16
+    container_name: leveluptech-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: leveluptech
+    ports:
+      - "5432:5432"
+    volumes:
+      - leveluptech_pg:/var/lib/postgresql/data
+
+  resume:
+    build:
+      context: ./python_service
+    container_name: levelup-pro-resume
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Optional: later you can add OPENAI_API_KEY here.
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  leveluptech_pg:

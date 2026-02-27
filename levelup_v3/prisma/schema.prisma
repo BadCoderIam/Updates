@@ -1,0 +1,390 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Track {
+  IT_SUPPORT
+}
+
+
+
+enum UserRank {
+  STUDENT
+  PROFESSIONAL
+}
+enum StartingPosition {
+  HELPDESK_SUPPORT
+  DESKTOP_TECHNICIAN
+  CLOUD_ENGINEER
+}
+
+enum ModuleChoice {
+  INTERVIEW
+  CERTIFICATIONS
+  PRO_DEV
+}
+
+enum NotificationType {
+  HR_INVITE
+  TECH_INTERVIEW_READY
+  BADGE_EXPIRES_SOON
+  LOOT_BOX_EARNED
+}
+
+enum InterviewKind {
+  HR
+  TECH
+}
+
+enum InterviewStatus {
+  IN_PROGRESS
+  FINISHED
+}
+
+enum TurnSpeaker {
+  INTERVIEWER
+  CANDIDATE
+}
+
+enum CertExam {
+  A_PLUS
+  SECURITY_PLUS
+  AZ_900
+}
+
+model User {
+  id               String            @id
+  email            String
+  displayName      String?
+  startingPosition StartingPosition?
+  moduleChoice     ModuleChoice?
+  xp               Int               @default(0)
+  lootGrantedUpToLevel Int           @default(0)
+  rank             UserRank          @default(STUDENT)
+  rankUpdatedAt    DateTime?
+  drawingEligibleUntil DateTime?
+  createdAt        DateTime          @default(now())
+  lastActiveAt     DateTime?
+
+  practiceAnswers PracticeAnswer[]
+  certAnswers     CertPracticeAnswer[]
+  domains         UserDomain[]
+  interviews      InterviewSession[]
+  notifications   Notification[]
+  badges          Badge[]
+  offers          MockOffer[]
+  resumeFiles     ResumeFile[]
+  resumeDrafts    ResumeDraft[]
+  lootBoxes       LootBox[]
+  wallet          Wallet?
+  inventory       InventoryItem[]
+
+}
+
+model PracticeAnswer {
+  id           String   @id @default(cuid())
+  userId       String
+  track        Track
+  tier         Int
+  domain       String
+  prompt       String
+  answer       String
+  scoreTotal   Float
+  xpAwarded    Int
+  breakdownJson Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+  @@index([userId, domain])
+}
+
+model CertPracticeAnswer {
+  id        String   @id @default(cuid())
+  userId    String
+  exam      CertExam
+  prompt    String
+  answer    String
+  xpAwarded Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+  @@index([userId, exam])
+}
+
+model UserDomain {
+  id              String   @id @default(cuid())
+  userId          String
+  domain          String
+  xp              Int      @default(0)
+  lastPracticedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, domain], name: "userId_domain")
+  @@index([userId, xp])
+}
+
+model InterviewSession {
+  id         String          @id @default(cuid())
+  userId     String
+  kind       InterviewKind
+  status     InterviewStatus
+  startedAt  DateTime
+  finishedAt DateTime?
+  pass       Boolean?
+  scoreAvg   Float?
+  summary    String?
+
+  turns      InterviewTurn[]
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, kind, startedAt])
+}
+
+model InterviewTurn {
+  id            String   @id @default(cuid())
+  sessionId     String
+  speaker       TurnSpeaker @default(CANDIDATE)
+  content       String
+  turnIndex     Int
+  scoreTotal    Float
+  breakdownJson Json
+  createdAt     DateTime @default(now())
+
+  session InterviewSession @relation(fields: [sessionId], references: [id])
+  @@index([sessionId, turnIndex])
+}
+
+model Badge {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  label     String
+  issuedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, expiresAt])
+}
+
+model MockOffer {
+  id          String   @id @default(cuid())
+  userId      String
+  companyName String
+  roleLabel   String
+  title       String
+  salaryText  String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        NotificationType
+  title       String
+  body        String
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+}
+
+
+model MarketingEvent {
+  id        String   @id @default(cuid())
+  event     String
+  source    String?
+  path      String?
+  userAgent String?
+  ip        String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+}
+
+
+enum QuestionDomain {
+  NETWORKING
+}
+
+enum QuestionSetStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+
+enum ContentLane {
+  TEST_NOW
+  TRAINING
+  CERTIFICATIONS
+}
+
+model QuestionSetPlacement {
+  id              String           @id @default(cuid())
+  setId           String
+  lane            ContentLane
+  startingPosition StartingPosition?
+  certExam        CertExam?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  set QuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([lane, isActive, createdAt])
+  @@index([lane, startingPosition])
+  @@index([lane, certExam])
+}
+
+model QuestionSet {
+  id        String            @id @default(cuid())
+  domain    QuestionDomain
+  name      String
+  status    QuestionSetStatus @default(DRAFT)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  placements QuestionSetPlacement[]
+
+  questions MCQQuestion[]
+
+  @@index([domain, status, createdAt])
+}
+
+model MCQQuestion {
+  id           String   @id @default(cuid())
+  setId        String
+  prompt       String
+  choices      Json
+  correctIndex Int
+  sortOrder    Int      @default(0)
+  explanation  String?
+  difficulty   Int      @default(1)
+  tags         String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  set QuestionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([setId, sortOrder])
+  @@index([setId, createdAt])
+}
+
+
+model ResumeFile {
+  id         String   @id @default(cuid())
+  userId     String
+  fileName   String
+  mimeType   String
+  storageKey String   // local path or S3 key
+  uploadedAt DateTime @default(now())
+  parsedAt   DateTime?
+  parsedJson Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, uploadedAt])
+}
+
+model ResumeDraft {
+  id         String   @id @default(cuid())
+  userId     String
+  templateId String
+  targetRole String
+  atsFirst   Boolean  @default(true)
+  contentJson Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+
+enum LootBoxType {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+}
+
+enum LootBoxStatus {
+  PENDING
+  OPENED
+  CLAIMED
+}
+
+enum LootRewardType {
+  TOKENS
+  XP_BOOST
+  BADGE
+  RAFFLE_ENTRY
+  COUPON
+  PRIZE
+}
+
+model LootBox {
+  id        String        @id @default(cuid())
+  userId    String
+  type      LootBoxType   @default(BRONZE)
+  status    LootBoxStatus @default(PENDING)
+  source    String?
+  createdAt DateTime      @default(now())
+  openedAt  DateTime?
+  claimedAt DateTime?
+
+  drops     LootDrop[]
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, status, createdAt])
+}
+
+model LootDrop {
+  id         String         @id @default(cuid())
+  lootBoxId  String
+  rewardType LootRewardType
+  rewardRef  String?
+  quantity   Int            @default(1)
+  rarity     String?
+  createdAt  DateTime       @default(now())
+
+  lootBox LootBox @relation(fields: [lootBoxId], references: [id])
+  @@index([lootBoxId, createdAt])
+}
+
+model Wallet {
+  userId       String @id
+  tokenBalance Int    @default(0)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model InventoryItem {
+  id        String   @id @default(cuid())
+  userId    String
+  itemType  String
+  itemRef   String?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+}
